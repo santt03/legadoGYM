@@ -18,6 +18,7 @@ const gymInput = z.object({
   defaultMembershipMonths: z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)]),
 })
 const run = promisify(execFile)
+const localBackupsAvailable = process.env.VERCEL !== '1'
 const backupDir = join(process.cwd(), 'backups')
 const pgBin = process.env.PG_BIN_DIR || (process.platform === 'win32' && existsSync('C:\\Program Files\\PostgreSQL\\18\\bin') ? 'C:\\Program Files\\PostgreSQL\\18\\bin' : '')
 const pgExecutable = (name: string) => pgBin ? join(pgBin, process.platform === 'win32' ? `${name}.exe` : name) : name
@@ -78,12 +79,14 @@ export function registerSettingsRoutes(app: Hono) {
     return result.rowCount ? c.body(null, 204) : c.json({ error: 'Solo se pueden eliminar entrenadores' }, 409)
   })
   app.get('/api/settings/backups', async (c) => {
+    if (!localBackupsAvailable) return c.json({ available: false, files: [] })
     await mkdir(backupDir, { recursive: true })
     const names = (await readdir(backupDir)).filter((name) => /^legado-gym-[\w-]+\.dump$/.test(name)).sort().reverse()
     const files = await Promise.all(names.map(async (name) => { const info = await stat(join(backupDir, name)); return { name, size: info.size, createdAt: info.mtime.toISOString() } }))
-    return c.json(files)
+    return c.json({ available: true, files })
   })
   app.post('/api/settings/backups', async (c) => {
+    if (!localBackupsAvailable) return c.json({ error: 'En la versión web, los respaldos se administran desde Supabase.' }, 409)
     await mkdir(backupDir, { recursive: true })
     const name = `legado-gym-${new Date().toISOString().replace(/[.:]/g, '-')}.dump`
     const output = join(backupDir, name)
@@ -100,6 +103,7 @@ export function registerSettingsRoutes(app: Hono) {
     }
   })
   app.get('/api/settings/backups/:name', async (c) => {
+    if (!localBackupsAvailable) return c.json({ error: 'Los respaldos se administran desde Supabase.' }, 404)
     const name = c.req.param('name')
     if (!/^legado-gym-[\w-]+\.dump$/.test(name)) return c.json({ error: 'Nombre de respaldo inválido' }, 400)
     const file = await readFile(join(backupDir, name)).catch(() => null)

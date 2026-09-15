@@ -23,7 +23,8 @@ if (isSupabase) {
 export const pool = new pg.Pool({
   connectionString: database.toString(),
   options: '-c timezone=America/Argentina/Buenos_Aires',
-  max: 10,
+  // Cada instancia serverless conserva su propio pool; una conexión evita agotar Supavisor.
+  max: process.env.VERCEL === '1' ? 1 : 10,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
   keepAlive: true,

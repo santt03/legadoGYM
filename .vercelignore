@@ -1,0 +1,9 @@
+.env
+backups
+docs
+output
+tmp
+src-tauri
+compose.yaml
+api-watch.err.log
+api-watch.out.log

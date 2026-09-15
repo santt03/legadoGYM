@@ -47,3 +47,7 @@ No se deben usar `SUPABASE_SERVICE_ROLE_KEY`, la clave anónima ni credenciales 
 - `docs/Plan_MVP_Web_Tauri.md`: fases del MVP web y escritorio.
 
 La aplicación de escritorio con Tauri está preparada como piloto local. Consultar [Operación del piloto](docs/Operacion_Piloto.md) para compilar el instalador, iniciar su servidor, crear entrenadores y recuperar respaldos. Los planes se conservan al actualizar la ficha del socio; si un socio tiene planes, no se permite eliminarlo y debe marcarse como inactivo para preservar el historial.
+
+## Deploy web
+
+La interfaz Vite y la API Hono están preparadas para desplegarse juntas en Vercel, manteniendo las rutas `/api` bajo el mismo dominio. Consultar [Deploy en Vercel](docs/Deploy_Vercel.md) para configurar las variables, validar la entrega y agregar el dominio del cliente.
