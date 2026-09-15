@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Legado Gym</title>
+  <defs>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f4f4f5"/>
+      <stop offset=".48" stop-color="#a8a8ad"/>
+      <stop offset="1" stop-color="#f0f0f1"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff4e53"/>
+      <stop offset="1" stop-color="#c91822"/>
+    </linearGradient>
+  </defs>
+  <path d="M92 218a170 170 0 0 1 330-27" fill="none" stroke="#a7a7ac" stroke-width="12" stroke-linecap="round"/>
+  <path d="M426 302a171 171 0 0 1-321 20" fill="none" stroke="url(#red)" stroke-width="12" stroke-linecap="round"/>
+  <g fill="#b8b8bd">
+    <rect x="32" y="251" width="448" height="10" rx="5"/>
+    <rect x="58" y="225" width="14" height="62" rx="4"/>
+    <rect x="77" y="211" width="19" height="90" rx="5"/>
+    <rect x="101" y="218" width="12" height="76" rx="4"/>
+    <rect x="440" y="225" width="14" height="62" rx="4"/>
+    <rect x="416" y="211" width="19" height="90" rx="5"/>
+    <rect x="399" y="218" width="12" height="76" rx="4"/>
+  </g>
+  <path d="M277 174c25-29 57-45 98-45 27 0 52 7 71 21l-22 39c-15-10-31-15-49-15-21 0-39 6-54 18-16 13-26 29-30 51h97l-9 39h-88c8 24 28 37 57 37 12 0 24-2 36-6l8-20h-45l10-36h91l-23 87c-22 11-48 17-77 17-43 0-75-13-96-39-19-23-26-54-20-90 4-24 13-43 25-58Z" fill="url(#steel)" stroke="#37373b" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M212 122h53l-69 183h100l-18 47H128l84-230Z" fill="url(#red)" stroke="#8f1119" stroke-width="5" stroke-linejoin="round"/>
+</svg>
