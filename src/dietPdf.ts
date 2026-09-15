@@ -49,6 +49,14 @@ function addDays(value: string, count: number) {
   return date.toISOString().slice(0, 10)
 }
 
+function addMonths(value: string, count: number) {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number)
+  const target = new Date(Date.UTC(year, month - 1 + count, 1))
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(day, lastDay))
+  return target.toISOString().slice(0, 10)
+}
+
 function ageAt(birthDate: string | null, at: string) {
   if (!birthDate) return 'No registrada'
   const [by, bm, bd] = birthDate.slice(0, 10).split('-').map(Number)
@@ -84,8 +92,8 @@ function drawPage(doc: jsPDF, diet: PdfDiet, logoData?: string, first = false, g
 }
 
 function drawWeekHeading(doc: jsPDF, weekNumber: number, startDate: string, continued = false, y = 52) {
-  const period = `${formatDate(addDays(startDate, (weekNumber - 1) * 7))} - ${formatDate(addDays(startDate, weekNumber * 7 - 1))}`
-  return drawWeekBanner(doc, weekNumber, period, continued, y)
+  const period = `${formatDate(addMonths(startDate, weekNumber - 1))} - ${formatDate(addDays(addMonths(startDate, weekNumber), -1))}`
+  return drawWeekBanner(doc, weekNumber, period, continued, y, 'MES')
 }
 
 function drawTableHeader(doc: jsPDF, y: number) {
@@ -106,11 +114,11 @@ function drawTableHeader(doc: jsPDF, y: number) {
 export async function buildDietPdf(diet: PdfDiet, logoData?: string, gymName = 'Legado Gym') {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true })
-  doc.setProperties({ title: `${diet.name} - ${diet.firstName} ${diet.lastName}`, subject: 'Plan de alimentación de cuatro semanas', author: gymName })
+  doc.setProperties({ title: `${diet.name} - ${diet.firstName} ${diet.lastName}`, subject: 'Plan mensual de alimentación', author: gymName })
   drawPage(doc, diet, logoData, true, gymName)
   const yStart = drawIntro(doc, `${diet.firstName} ${diet.lastName}`, diet.name,
     ageAt(diet.birthDate, diet.startDate), diet.weightKg ? `${diet.weightKg} kg` : 'No registrado',
-    formatDate(diet.startDate), formatDate(addDays(diet.startDate, 27)), clean(diet.objective || diet.memberObjective))
+    formatDate(diet.startDate), formatDate(addDays(addMonths(diet.startDate, diet.weeks.length), -1)), clean(diet.objective || diet.memberObjective))
   let y = drawWeekHeading(doc, 1, diet.startDate, false, yStart)
 
   for (const [weekIndex, week] of diet.weeks.entries()) {
@@ -123,7 +131,7 @@ export async function buildDietPdf(diet: PdfDiet, logoData?: string, gymName = '
       doc.setTextColor(MUTED)
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(10)
-      doc.text('No hay días de alimentación cargados en esta semana.', 19, y + 4)
+      doc.text('No hay menús cargados en este mes.', 19, y + 4)
       continue
     }
     for (const day of week.days) {

@@ -16,9 +16,9 @@ const foodInput = z.object({
 const itemInput = z.object({ foodId: uuid, quantity: z.string().trim().max(80), grams: z.number().positive().max(5000).nullable(), notes: z.string().trim().max(500) })
 const mealInput = z.object({ name: z.string().trim().min(1).max(80), items: z.array(itemInput).max(40) })
 const dayInput = z.object({ name: z.string().trim().min(1).max(80), meals: z.array(mealInput).max(14) })
-const weekInput = z.object({ weekNumber: z.number().int().min(1).max(4), days: z.array(dayInput).max(14) })
-const dietInput = z.object({ memberId: uuid, name: z.string().trim().min(1).max(120), objective: z.string().trim().max(500), startDate: z.iso.date(), weeks: z.array(weekInput).length(4) })
-  .refine((d) => new Set(d.weeks.map((w) => w.weekNumber)).size === 4, { message: 'La dieta debe tener las semanas 1 a 4' })
+const weekInput = z.object({ weekNumber: z.number().int().min(1).max(12), days: z.array(dayInput).max(14) })
+const dietInput = z.object({ memberId: uuid, name: z.string().trim().min(1).max(120), objective: z.string().trim().max(500), startDate: z.iso.date(), weeks: z.array(weekInput).min(1).max(12) })
+  .refine((d) => d.weeks.every((week, index) => week.weekNumber === index + 1), { message: 'Los meses deben ser consecutivos desde el mes 1' })
 type DietInput = z.infer<typeof dietInput>
 type FoodRow = { id: string; name: string; groupId: string | null; groupName: string | null; calories: string; protein: string; carbs: string; fat: string; notes: string }
 
@@ -61,11 +61,12 @@ async function dietDetail(id: string) {
      LEFT JOIN foods f ON f.id=i.food_id
      WHERE w.diet_id=$1 ORDER BY w.week_number, d.position, m.position, i.position`, [id],
   )
-  const weeks = [1, 2, 3, 4].map((weekNumber) => ({ weekNumber, days: [] as Array<{
+  const monthNumbers = [...new Set(rows.rows.map((row) => row.week_number))].sort((a, b) => a - b)
+  const weeks = monthNumbers.map((weekNumber) => ({ weekNumber, days: [] as Array<{
     id: string; name: string; meals: Array<{ id: string; name: string; items: Array<{ id: string; foodId: string; foodName: string; quantity: string; grams: number | null; notes: string; calories: number | null; protein: number | null; carbs: number | null; fat: number | null }> }>
   }> }))
   for (const row of rows.rows) {
-    const week = weeks[row.week_number - 1]
+    const week = weeks.find((item) => item.weekNumber === row.week_number)
     if (!row.day_id || !week) continue
     let day = week.days.find((d) => d.id === row.day_id)
     if (!day) { day = { id: row.day_id, name: row.day_name || '', meals: [] }; week.days.push(day) }

@@ -79,7 +79,7 @@ export function drawIntro(doc: jsPDF, person: string, planName: string, age: str
   return 90 + objectiveHeight + 6
 }
 
-export function drawWeekBanner(doc: jsPDF, weekNumber: number, period: string, continued = false, y = 52) {
+export function drawWeekBanner(doc: jsPDF, weekNumber: number, period: string, continued = false, y = 52, unit = 'SEMANA') {
   doc.setFillColor(DARK)
   doc.roundedRect(16, y, 178, 16, 2, 2, 'F')
   doc.setFillColor(RED)
@@ -89,7 +89,7 @@ export function drawWeekBanner(doc: jsPDF, weekNumber: number, period: string, c
   doc.setFontSize(12)
   doc.text(String(weekNumber).padStart(2, '0'), 26, y + 10.5, { align: 'center' })
   doc.setFontSize(10)
-  doc.text(continued ? 'SEMANA / CONTINUACIÓN' : 'SEMANA DE TRABAJO', 42, y + 10)
+  doc.text(continued ? `${unit} / CONTINUACIÓN` : `${unit} DE TRABAJO`, 42, y + 10)
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.text(period, 188, y + 10, { align: 'right' })
