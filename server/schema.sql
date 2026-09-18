@@ -94,9 +94,11 @@ CREATE INDEX IF NOT EXISTS training_plans_member_idx ON training_plans (gym_id, 
 CREATE TABLE IF NOT EXISTS training_weeks (
   id uuid PRIMARY KEY,
   plan_id uuid NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
-  week_number integer NOT NULL CHECK (week_number BETWEEN 1 AND 4),
+  week_number integer NOT NULL CHECK (week_number BETWEEN 1 AND 12),
   UNIQUE (plan_id, week_number)
 );
+ALTER TABLE training_weeks DROP CONSTRAINT IF EXISTS training_weeks_week_number_check;
+ALTER TABLE training_weeks ADD CONSTRAINT training_weeks_week_number_check CHECK (week_number BETWEEN 1 AND 12);
 
 CREATE TABLE IF NOT EXISTS training_days (
   id uuid PRIMARY KEY,

@@ -8,9 +8,9 @@ const muscleGroupInput = z.object({ name: z.string().trim().min(1).max(80).refin
 const exerciseInput = z.object({ name: z.string().trim().min(1).max(120), muscleGroup: z.string().trim().min(1).max(80), notes: z.string().trim().max(500) })
 const itemInput = z.object({ exerciseId: uuid, sets: z.number().int().min(1).max(30), reps: z.string().trim().min(1).max(60), load: z.string().trim().max(60), restSeconds: z.number().int().min(0).max(3600).nullable(), notes: z.string().trim().max(500) })
 const dayInput = z.object({ name: z.string().trim().min(1).max(80), muscleGroup: z.string().trim().max(120), exercises: z.array(itemInput).max(40) })
-const weekInput = z.object({ weekNumber: z.number().int().min(1).max(4), days: z.array(dayInput).max(14) })
-const planInput = z.object({ memberId: uuid, name: z.string().trim().min(1).max(120), objective: z.string().trim().max(500), startDate: z.iso.date(), weeks: z.array(weekInput).length(4) })
-  .refine((p) => new Set(p.weeks.map((w) => w.weekNumber)).size === 4, { message: 'El plan debe tener las semanas 1 a 4' })
+const weekInput = z.object({ weekNumber: z.number().int().min(1).max(12), days: z.array(dayInput).max(14) })
+const planInput = z.object({ memberId: uuid, name: z.string().trim().min(1).max(120), objective: z.string().trim().max(500), startDate: z.iso.date(), weeks: z.array(weekInput).min(1).max(12) })
+  .refine((p) => p.weeks.every((month, index) => month.weekNumber === index + 1), { message: 'Los meses deben ser consecutivos desde el mes 1' })
 type PlanInput = z.infer<typeof planInput>
 
 async function planDetail(id: string) {
@@ -37,11 +37,11 @@ async function planDetail(id: string) {
      LEFT JOIN exercises e ON e.id=i.exercise_id
      WHERE w.plan_id=$1 ORDER BY w.week_number, d.position, i.position`, [id],
   )
-  const weeks = [1, 2, 3, 4].map((weekNumber) => ({ weekNumber, days: [] as Array<{
+  const weeks = [...new Set(rows.rows.map((row) => row.week_number))].sort((a, b) => a - b).map((weekNumber) => ({ weekNumber, days: [] as Array<{
     id: string; name: string; muscleGroup: string; exercises: Array<{ id: string; exerciseId: string; exerciseName: string; sets: number; reps: string; load: string; restSeconds: number | null; notes: string }>
   }> }))
   for (const row of rows.rows) {
-    const week = weeks[row.week_number - 1]
+    const week = weeks.find((month) => month.weekNumber === row.week_number)
     if (!row.day_id || !week) continue
     let day = week.days.find((d) => d.id === row.day_id)
     if (!day) { day = { id: row.day_id, name: row.day_name || '', muscleGroup: row.muscle_group || '', exercises: [] }; week.days.push(day) }
