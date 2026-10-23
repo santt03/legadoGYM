@@ -1,9 +1,13 @@
-const SHELL_CACHE = 'legado-shell-v3'
-const DATA_CACHE = 'legado-student-data-v3'
+const SHELL_CACHE = 'legado-shell-v4'
+const DATA_CACHE = 'legado-student-data-v4'
 const SHELL = ['/alumno', '/', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())))
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
+self.addEventListener('activate', (event) => event.waitUntil(
+  caches.keys()
+    .then((keys) => Promise.all(keys.filter((key) => key.startsWith('legado-') && key !== SHELL_CACHE && key !== DATA_CACHE).map((key) => caches.delete(key))))
+    .then(() => self.clients.claim())
+))
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
