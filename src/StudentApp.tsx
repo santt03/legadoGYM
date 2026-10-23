@@ -240,7 +240,7 @@ function PasswordChange({
   );
 }
 
-function StudentHome({ session, onLogout }: { session: Session; onLogout: () => void }) {
+function StudentHome({ session, onLogout, installPrompt, onInstall }: { session: Session; onLogout: () => void; installPrompt: InstallPromptEvent | null; onInstall: () => Promise<void> }) {
   const [data, setData] = useState<Overview | null>(null);
   const [page, setPage] = useState<
     "inicio" | "rutina" | "dieta" | "gimnasio" | "perfil"
@@ -248,7 +248,9 @@ function StudentHome({ session, onLogout }: { session: Session; onLogout: () => 
   const [error, setError] = useState("");
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
-  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const load = () =>
     request<Overview>("/student/overview")
       .then(setData)
@@ -260,11 +262,9 @@ function StudentHome({ session, onLogout }: { session: Session; onLogout: () => 
   }, []);
   useEffect(() => {
     const updateNetwork = () => setOffline(!navigator.onLine);
-    const captureInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
-    window.addEventListener("online", updateNetwork); window.addEventListener("offline", updateNetwork); window.addEventListener("beforeinstallprompt", captureInstall);
-    return () => { window.removeEventListener("online", updateNetwork); window.removeEventListener("offline", updateNetwork); window.removeEventListener("beforeinstallprompt", captureInstall); };
+    window.addEventListener("online", updateNetwork); window.addEventListener("offline", updateNetwork);
+    return () => { window.removeEventListener("online", updateNetwork); window.removeEventListener("offline", updateNetwork); };
   }, []);
-  async function install() { if (!installPrompt) return; await installPrompt.prompt(); await installPrompt.userChoice; setInstallPrompt(null); }
   if (error)
     return (
       <div className="grid min-h-screen place-items-center bg-zinc-950 p-6 text-center text-white">
@@ -332,7 +332,7 @@ function StudentHome({ session, onLogout }: { session: Session; onLogout: () => 
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-5 pb-28 pt-6">{offline && <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs font-semibold text-amber-200"><WifiOff size={16}/> Sin conexión: mostramos tu información guardada.</div>}{page === "inicio" && installPrompt && <button onClick={() => void install()} className="mb-4 flex w-full items-center gap-3 rounded-2xl border border-lime-400/30 bg-lime-400/10 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Instalá Legado Gym</strong><small className="text-zinc-400">Accedé más rápido desde tu pantalla de inicio.</small></span><ChevronRight className="text-lime-400"/></button>}{content}</main>
+      <main className="mx-auto max-w-lg px-5 pb-28 pt-6">{offline && <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs font-semibold text-amber-200"><WifiOff size={16}/> Sin conexión: mostramos tu información guardada.</div>}{page === "inicio" && !isStandalone && <section className="mb-4 overflow-hidden rounded-2xl border border-lime-400/30 bg-lime-400/10">{installPrompt ? <button onClick={() => void onInstall()} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Instalá Legado Gym</strong><small className="text-zinc-400">Accedé más rápido desde tu pantalla de inicio.</small></span><ChevronRight className="text-lime-400"/></button> : <button onClick={() => setInstallGuideOpen((open) => !open)} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Agregá la app a tu inicio</strong><small className="text-zinc-400">Instalala para usar Legado Gym como una app.</small></span><ChevronRight className={`text-lime-400 transition ${installGuideOpen ? "rotate-90" : ""}`}/></button>}{installGuideOpen && <div className="border-t border-lime-400/20 px-4 pb-4 pt-3 text-sm leading-6 text-zinc-300">{isAppleMobile ? <>En Safari tocá <strong className="text-white">Compartir</strong>, elegí <strong className="text-white">“Agregar a inicio”</strong> y confirmá.</> : <>Abrí el menú de tu navegador y elegí <strong className="text-white">“Instalar app”</strong> o <strong className="text-white">“Agregar a pantalla de inicio”</strong>.</>}</div>}</section>}{content}</main>
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-zinc-900/95 px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(0,0,0,.22)] backdrop-blur">
         <div className="mx-auto flex max-w-lg justify-around">
           {(
@@ -687,10 +687,25 @@ export function StudentGate() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   useEffect(() => {
     if ("serviceWorker" in navigator)
       void navigator.serviceWorker.register("/sw.js");
   }, []);
+  useEffect(() => {
+    const captureInstall = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", captureInstall);
+    return () => window.removeEventListener("beforeinstallprompt", captureInstall);
+  }, []);
+  async function install() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  }
   useEffect(() => {
     fetch("/api/auth/me")
       .then(async (response) => (response.ok ? response.json() : null))
@@ -732,7 +747,7 @@ export function StudentGate() {
       </div>
     );
   if (session)
-    return <StudentHome session={session} onLogout={() => void logout()} />;
+    return <StudentHome session={session} onLogout={() => void logout()} installPrompt={installPrompt} onInstall={install} />;
   return (
     <main className="student-shell grid min-h-screen place-items-center bg-zinc-950 p-5 text-white">
       <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-zinc-900 p-7 shadow-2xl">
