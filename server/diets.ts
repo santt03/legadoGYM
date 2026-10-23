@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import { pool, GYM_ID } from './db.js'
+import { notifyMember } from './notifications.js'
 
 const uuid = z.string().uuid()
 const foodInput = z.object({
@@ -222,6 +223,7 @@ export function registerDietRoutes(app: Hono) {
       await client.query('COMMIT')
     } catch (error) { await client.query('ROLLBACK'); throw error }
     finally { client.release() }
+    await notifyMember(memberId, 'DIET', 'Nuevo plan de alimentación', `Ya podés consultar “${name}” en tu espacio.`, `diet:${id}`)
     return c.json(await dietDetail(id), 201)
   })
   app.put('/api/diets/:id', async (c) => {

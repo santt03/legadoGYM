@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Apple,
   ArrowRight,
@@ -103,6 +103,8 @@ type Overview = {
   };
   plan: Plan | null;
   diet: Diet | null;
+  announcements: Array<{ id: string; title: string; body: string; kind: "INFO" | "SCHEDULE" | "HOLIDAY" | "PLAN"; startsAt: string; endsAt: string | null }>;
+  notifications: Array<{ id: string; type: "MEMBERSHIP" | "ROUTINE" | "DIET" | "ANNOUNCEMENT"; title: string; body: string; readAt: string | null; createdAt: string }>;
   forcePasswordChange: boolean;
 };
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<unknown> };
@@ -240,7 +242,7 @@ function PasswordChange({
   );
 }
 
-function StudentHome({ session, onLogout, installPrompt, onInstall }: { session: Session; onLogout: () => void; installPrompt: InstallPromptEvent | null; onInstall: () => Promise<void> }) {
+function StudentHome({ session, onLogout, installPrompt, onInstall, updateAvailable, onUpdate }: { session: Session; onLogout: () => void; installPrompt: InstallPromptEvent | null; onInstall: () => Promise<void>; updateAvailable: boolean; onUpdate: () => void }) {
   const [data, setData] = useState<Overview | null>(null);
   const [page, setPage] = useState<
     "inicio" | "rutina" | "dieta" | "gimnasio" | "perfil"
@@ -334,7 +336,7 @@ function StudentHome({ session, onLogout, installPrompt, onInstall }: { session:
           </button>
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-5 pb-28 pt-6">{offline && <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs font-semibold text-amber-200"><WifiOff size={16}/> Sin conexión: mostramos tu información guardada.</div>}{page === "inicio" && !isStandalone && <section className="mb-4 overflow-hidden rounded-2xl border border-lime-400/30 bg-lime-400/10">{installPrompt ? <button onClick={() => void onInstall()} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Instalá Legado Gym</strong><small className="text-zinc-400">Accedé más rápido desde tu pantalla de inicio.</small></span><ChevronRight className="text-lime-400"/></button> : <button onClick={() => setInstallGuideOpen((open) => !open)} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Agregá la app a tu inicio</strong><small className="text-zinc-400">Instalala para usar Legado Gym como una app.</small></span><ChevronRight className={`text-lime-400 transition ${installGuideOpen ? "rotate-90" : ""}`}/></button>}{installGuideOpen && <div className="border-t border-lime-400/20 px-4 pb-4 pt-3 text-sm leading-6 text-zinc-300">{isAppleMobile ? <>En Safari tocá <strong className="text-white">Compartir</strong>, elegí <strong className="text-white">“Agregar a inicio”</strong> y confirmá.</> : <>Abrí el menú de tu navegador y elegí <strong className="text-white">“Instalar app”</strong> o <strong className="text-white">“Agregar a pantalla de inicio”</strong>.</>}</div>}</section>}{content}</main>
+      <main className="mx-auto max-w-lg px-5 pb-28 pt-6">{updateAvailable && <button type="button" onClick={onUpdate} className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border border-sky-300/30 bg-sky-300/10 px-4 py-3 text-left text-sm font-semibold text-sky-100"><span><strong className="block">Hay una nueva versión</strong><small className="text-sky-100/75">Actualizá para ver las últimas mejoras.</small></span><span className="rounded-lg bg-sky-200 px-3 py-2 text-xs font-black uppercase tracking-wide text-sky-950">Actualizar</span></button>}{offline && <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs font-semibold text-amber-200"><WifiOff size={16}/> Sin conexión: mostramos tu información guardada.</div>}{page === "inicio" && !isStandalone && <section className="mb-4 overflow-hidden rounded-2xl border border-lime-400/30 bg-lime-400/10">{installPrompt ? <button onClick={() => void onInstall()} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Instalá Legado Gym</strong><small className="text-zinc-400">Accedé más rápido desde tu pantalla de inicio.</small></span><ChevronRight className="text-lime-400"/></button> : <button onClick={() => setInstallGuideOpen((open) => !open)} className="flex w-full items-center gap-3 p-4 text-left"><span className="grid size-10 place-items-center rounded-xl bg-lime-400 text-zinc-950"><Download size={19}/></span><span className="flex-1"><strong className="block text-sm">Agregá la app a tu inicio</strong><small className="text-zinc-400">Instalala para usar Legado Gym como una app.</small></span><ChevronRight className={`text-lime-400 transition ${installGuideOpen ? "rotate-90" : ""}`}/></button>}{installGuideOpen && <div className="border-t border-lime-400/20 px-4 pb-4 pt-3 text-sm leading-6 text-zinc-300">{isAppleMobile ? <>En Safari tocá <strong className="text-white">Compartir</strong>, elegí <strong className="text-white">“Agregar a inicio”</strong> y confirmá.</> : <>Abrí el menú de tu navegador y elegí <strong className="text-white">“Instalar app”</strong> o <strong className="text-white">“Agregar a pantalla de inicio”</strong>.</>}</div>}</section>}{content}</main>
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-white/10 bg-zinc-900/95 px-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(0,0,0,.22)] backdrop-blur">
         <div className="mx-auto flex max-w-lg justify-around">
           {(
@@ -405,6 +407,10 @@ function Home({
         <p className="student-display text-4xl font-black uppercase leading-none text-white">¡Hola, {data.member.firstName}! <span className="text-2xl" aria-hidden="true">👋</span></p>
         <p className="mt-2 flex items-center gap-1.5 text-sm text-zinc-400"><Zap size={16} className="shrink-0 text-[#c3f400]" /> Tu espacio para seguir avanzando.</p>
       </section>
+
+      {data.notifications.length > 0 && <section className="overflow-hidden rounded-xl border border-[#c3f400]/25 bg-[#c3f400]/5"><div className="flex items-center gap-2 border-b border-[#c3f400]/15 px-4 py-3 text-xs font-black uppercase tracking-wider text-[#c3f400]"><InfoIcon size={16} /> Tus notificaciones</div><div className="divide-y divide-[#c3f400]/10">{data.notifications.slice(0, 3).map((notification) => <article key={notification.id} className="px-4 py-3"><h2 className="student-display text-base font-bold uppercase text-white">{notification.title}</h2><p className="mt-1 text-sm leading-5 text-zinc-300">{notification.body}</p></article>)}</div></section>}
+
+      {data.announcements.length > 0 && <section className="overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/10"><div className="flex items-center gap-2 border-b border-sky-300/15 px-4 py-3 text-xs font-black uppercase tracking-wider text-sky-200"><InfoIcon size={16} /> Novedades del gimnasio</div><div className="divide-y divide-sky-300/10">{data.announcements.map((announcement) => <article key={announcement.id} className="px-4 py-3"><h2 className="student-display text-base font-bold uppercase text-white">{announcement.title}</h2><p className="mt-1 text-sm leading-5 text-zinc-300">{announcement.body}</p></article>)}</div></section>}
 
       <section className="overflow-hidden rounded-xl border border-[#444933] bg-[#1a2025] p-4 shadow-lg">
         <div className="flex items-center justify-between gap-2">
@@ -698,9 +704,29 @@ export function StudentGate() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [updateRegistration, setUpdateRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const updateReloading = useRef(false);
   useEffect(() => {
-    if ("serviceWorker" in navigator)
-      void navigator.serviceWorker.register("/sw.js");
+    if (!("serviceWorker" in navigator)) return;
+    const serviceWorker = navigator.serviceWorker;
+    const showUpdate = (registration: ServiceWorkerRegistration) => {
+      if (registration.waiting && serviceWorker.controller) setUpdateRegistration(registration);
+    };
+    const onControllerChange = () => {
+      if (updateReloading.current) window.location.reload();
+    };
+    serviceWorker.addEventListener("controllerchange", onControllerChange);
+    void serviceWorker.register("/sw.js").then((registration) => {
+      showUpdate(registration);
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed") showUpdate(registration);
+        });
+      });
+    });
+    return () => serviceWorker.removeEventListener("controllerchange", onControllerChange);
   }, []);
   useEffect(() => {
     const captureInstall = (event: Event) => {
@@ -715,6 +741,11 @@ export function StudentGate() {
     await installPrompt.prompt();
     await installPrompt.userChoice;
     setInstallPrompt(null);
+  }
+  function applyUpdate() {
+    if (!updateRegistration?.waiting) return;
+    updateReloading.current = true;
+    updateRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
   useEffect(() => {
     fetch("/api/auth/me")
@@ -757,7 +788,7 @@ export function StudentGate() {
       </div>
     );
   if (session)
-    return <StudentHome session={session} onLogout={() => void logout()} installPrompt={installPrompt} onInstall={install} />;
+    return <StudentHome session={session} onLogout={() => void logout()} installPrompt={installPrompt} onInstall={install} updateAvailable={Boolean(updateRegistration)} onUpdate={applyUpdate} />;
   return (
     <main className="student-shell grid min-h-screen place-items-center bg-zinc-950 p-5 text-white">
       <div className="w-full max-w-sm rounded-[2rem] border border-white/10 bg-zinc-900 p-7 shadow-2xl">

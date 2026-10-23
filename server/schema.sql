@@ -163,6 +163,32 @@ CREATE TABLE IF NOT EXISTS member_push_subscriptions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS gym_announcements (
+  id uuid PRIMARY KEY,
+  gym_id uuid NOT NULL REFERENCES gyms(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  body text NOT NULL,
+  kind text NOT NULL DEFAULT 'INFO' CHECK (kind IN ('INFO','SCHEDULE','HOLIDAY','PLAN')),
+  starts_at date NOT NULL DEFAULT CURRENT_DATE,
+  ends_at date,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS gym_announcements_visible_idx ON gym_announcements (gym_id, active, starts_at DESC);
+
+CREATE TABLE IF NOT EXISTS member_notifications (
+  id uuid PRIMARY KEY,
+  member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  type text NOT NULL CHECK (type IN ('MEMBERSHIP','ROUTINE','DIET','ANNOUNCEMENT')),
+  title text NOT NULL,
+  body text NOT NULL,
+  dedupe_key text NOT NULL,
+  read_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (member_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS member_notifications_feed_idx ON member_notifications (member_id, read_at, created_at DESC);
+
 INSERT INTO gyms (id, name) VALUES ('00000000-0000-4000-8000-000000000001', 'Legado Gym')
 ON CONFLICT (id) DO NOTHING;
 

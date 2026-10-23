@@ -7,6 +7,7 @@ import { registerAuth } from './auth.js'
 import { registerSettingsRoutes } from './settings.js'
 import { hashPassword } from './auth.js'
 import { registerStudentRoutes } from './student.js'
+import { registerAnnouncementRoutes } from './announcements.js'
 
 const date = z.iso.date()
 const memberInput = z.object({
@@ -71,11 +72,16 @@ app.get('/api/members', async (c) => {
 })
 
 app.get('/api/dashboard/student-engagement', async (c) => {
-  const summary = await pool.query<{ total_accounts: string; activated_accounts: string; trained_this_week: string }>(
+  const summary = await pool.query<{ total_accounts: string; activated_accounts: string; trained_this_week: string; inactive_7: string; inactive_14: string; without_plan: string; without_diet: string; expiring_week: string }>(
     `SELECT
       count(*) FILTER (WHERE u.role='MEMBER') AS total_accounts,
       count(*) FILTER (WHERE u.role='MEMBER' AND NOT u.force_password_change) AS activated_accounts,
-      (SELECT count(DISTINCT member_id) FROM member_workout_completions WHERE completed_at >= date_trunc('week', CURRENT_DATE)::date) AS trained_this_week
+      (SELECT count(DISTINCT member_id) FROM member_workout_completions WHERE completed_at >= date_trunc('week', CURRENT_DATE)::date) AS trained_this_week,
+      (SELECT count(*) FROM members m LEFT JOIN users u ON u.member_id=m.id AND u.role='MEMBER' WHERE m.gym_id=$1 AND NOT m.inactive AND (u.last_login_at IS NULL OR u.last_login_at < now()-interval '7 days')) AS inactive_7,
+      (SELECT count(*) FROM members m LEFT JOIN users u ON u.member_id=m.id AND u.role='MEMBER' WHERE m.gym_id=$1 AND NOT m.inactive AND (u.last_login_at IS NULL OR u.last_login_at < now()-interval '14 days')) AS inactive_14,
+      (SELECT count(*) FROM members m WHERE m.gym_id=$1 AND NOT m.inactive AND NOT EXISTS (SELECT 1 FROM training_plans p WHERE p.member_id=m.id)) AS without_plan,
+      (SELECT count(*) FROM members m WHERE m.gym_id=$1 AND NOT m.inactive AND NOT EXISTS (SELECT 1 FROM diets d WHERE d.member_id=m.id)) AS without_diet,
+      (SELECT count(*) FROM members m WHERE m.gym_id=$1 AND NOT m.inactive AND m.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE+7) AS expiring_week
      FROM users u WHERE u.gym_id=$1`, [GYM_ID],
   )
   const inactive = await pool.query<{ id: string; firstName: string; lastName: string; phone: string; lastLoginAt: Date | null; daysSinceLogin: number | null }>(
@@ -86,7 +92,7 @@ app.get('/api/dashboard/student-engagement', async (c) => {
      ORDER BY u.last_login_at NULLS FIRST,m.last_name,m.first_name LIMIT 8`, [GYM_ID],
   )
   const row = summary.rows[0]
-  return c.json({ totalAccounts: Number(row.total_accounts), activatedAccounts: Number(row.activated_accounts), trainedThisWeek: Number(row.trained_this_week), inactive })
+  return c.json({ totalAccounts: Number(row.total_accounts), activatedAccounts: Number(row.activated_accounts), trainedThisWeek: Number(row.trained_this_week), inactive7: Number(row.inactive_7), inactive14: Number(row.inactive_14), withoutPlan: Number(row.without_plan), withoutDiet: Number(row.without_diet), expiringWeek: Number(row.expiring_week), inactive })
 })
 
 // Consulta estable para el futuro lector de huellas: la identidad biométrica
@@ -211,6 +217,7 @@ app.delete('/api/members/:id', async (c) => {
 
 registerPlanRoutes(app)
 registerDietRoutes(app)
+registerAnnouncementRoutes(app)
 registerSettingsRoutes(app)
 registerStudentRoutes(app)
 

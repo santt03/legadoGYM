@@ -9,3 +9,9 @@ createRoot(document.getElementById('root')!).render(
     {window.location.pathname.startsWith('/alumno') ? <StudentGate /> : <AuthGate />}
   </StrictMode>,
 )
+
+window.setTimeout(() => {
+  const splash = document.getElementById('pwa-splash')
+  splash?.classList.add('pwa-splash--hidden')
+  window.setTimeout(() => splash?.remove(), 300)
+}, 250)

@@ -2,6 +2,7 @@ import type { Context, Hono } from 'hono'
 import { z } from 'zod'
 import { pool, GYM_ID } from './db.js'
 import { sessionUser } from './auth.js'
+import { ensureMembershipReminder } from './notifications.js'
 
 async function memberForRequest(c: Context) {
   const user = await sessionUser(c)
@@ -66,9 +67,10 @@ export function registerStudentRoutes(app: Hono) {
     const result = await pool.query(`SELECT first_name AS "firstName",last_name AS "lastName",phone,objective,start_date AS "startDate",end_date AS "endDate",inactive FROM members WHERE id=$1 AND gym_id=$2`, [user.memberId, GYM_ID])
     const member = result.rows[0]
     if (!member) return c.json({ error: 'Socio no encontrado' }, 404)
+    await ensureMembershipReminder(user.memberId, member.endDate, member.inactive)
     const gym = await pool.query('SELECT name,logo_data_url AS "logoDataUrl",address,whatsapp,instagram,opening_hours AS "openingHours",maps_url AS "mapsUrl" FROM gyms WHERE id=$1', [GYM_ID])
-    const [plan, diet] = await Promise.all([currentPlan(user.memberId), currentDiet(user.memberId)])
-    return c.json({ member, gym: gym.rows[0], plan, diet, forcePasswordChange: user.forcePasswordChange })
+    const [plan, diet, announcements, notifications] = await Promise.all([currentPlan(user.memberId), currentDiet(user.memberId), pool.query('SELECT id,title,body,kind,starts_at AS "startsAt",ends_at AS "endsAt" FROM gym_announcements WHERE gym_id=$1 AND active=true AND starts_at<=CURRENT_DATE AND (ends_at IS NULL OR ends_at>=CURRENT_DATE) ORDER BY starts_at DESC,created_at DESC LIMIT 5', [GYM_ID]), pool.query('SELECT id,type,title,body,read_at AS "readAt",created_at AS "createdAt" FROM member_notifications WHERE member_id=$1 ORDER BY created_at DESC LIMIT 10', [user.memberId])])
+    return c.json({ member, gym: gym.rows[0], plan, diet, announcements: announcements.rows, notifications: notifications.rows, forcePasswordChange: user.forcePasswordChange })
   })
   app.get('/api/student/routine', async (c) => {
     const user = await memberForRequest(c)

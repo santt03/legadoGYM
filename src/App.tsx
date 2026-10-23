@@ -14,6 +14,7 @@ import {
   Settings2,
   Trash2,
   Users,
+  MessageCircle,
   X,
 } from "lucide-react";
 import logo from "./assets/legado-mark.svg";
@@ -22,6 +23,7 @@ import { useConfirmDialog } from "./useConfirmDialog";
 import { Settings, type GymSettings } from "./Settings";
 import { UsageGuide } from "./UsageGuide";
 import { AccessControl } from "./AccessControl";
+import { Announcements } from "./Announcements";
 import "./App.css";
 
 type Member = {
@@ -48,6 +50,11 @@ type StudentEngagement = {
   totalAccounts: number;
   activatedAccounts: number;
   trainedThisWeek: number;
+  inactive7: number;
+  inactive14: number;
+  withoutPlan: number;
+  withoutDiet: number;
+  expiringWeek: number;
   inactive: Array<{
     id: string;
     firstName: string;
@@ -742,7 +749,7 @@ function App({
                 <section className="engagement-panel">
                   <div className="engagement-summary">
                     <div><small>APP DE ALUMNOS</small><h2>Actividad de la comunidad</h2><p>Seguimiento de accesos y entrenamientos registrados.</p></div>
-                    <div className="engagement-metrics"><span><strong>{engagement.activatedAccounts}</strong>cuentas activadas</span><span><strong>{engagement.trainedThisWeek}</strong>entrenaron esta semana</span></div>
+                    <div className="engagement-metrics"><span><strong>{engagement.activatedAccounts}</strong>cuentas activadas</span><span><strong>{engagement.trainedThisWeek}</strong>entrenaron esta semana</span><span><strong>{engagement.inactive7}/{engagement.inactive14}</strong>sin ingreso 7/14 días</span><span><strong>{engagement.withoutPlan}/{engagement.withoutDiet}</strong>sin rutina / dieta</span><span><strong>{engagement.expiringWeek}</strong>vencen esta semana</span></div>
                   </div>
                   <div className="engagement-list">
                     <div><small>SIN INGRESO EN 14 DÍAS</small><strong>{engagement.inactive.length ? `${engagement.inactive.length} para revisar` : 'Todo al día'}</strong></div>
@@ -750,6 +757,7 @@ function App({
                   </div>
                 </section>
               )}
+              <Announcements enabled={role === "ADMIN"} />
               <div className="dashboard-grid">
                 <section className="panel">
                   <div className="panel-head">
@@ -1082,6 +1090,7 @@ function App({
               </div>
             )}
             <div className="actions">
+              {selected.phone.replace(/\D/g, "") && <a className="button secondary" href={`https://wa.me/${selected.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${selected.firstName}, te escribimos desde Legado Gym.`)}`} target="_blank" rel="noreferrer"><MessageCircle size={16} /> WhatsApp</a>}
               {role === "ADMIN" && (
                 <>
                   <button

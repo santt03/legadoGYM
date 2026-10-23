@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { PoolClient } from 'pg'
 import { z } from 'zod'
 import { pool, GYM_ID } from './db.js'
+import { notifyMember } from './notifications.js'
 
 const uuid = z.string().uuid()
 const muscleGroupInput = z.object({ name: z.string().trim().min(1).max(80).refine((name) => !name.includes(','), { message: 'El nombre no puede contener comas' }) })
@@ -190,6 +191,7 @@ export function registerPlanRoutes(app: Hono) {
       await client.query('COMMIT')
     } catch (error) { await client.query('ROLLBACK'); throw error }
     finally { client.release() }
+    await notifyMember(memberId, 'ROUTINE', 'Nueva rutina asignada', `Ya podés consultar “${name}” en tu espacio.`, `routine:${id}`)
     return c.json(await planDetail(id), 201)
   })
   app.put('/api/plans/:id', async (c) => {
