@@ -299,6 +299,8 @@ function StudentHome({ session, onLogout, installPrompt, onInstall }: { session:
         onLogout={onLogout}
         onChangePassword={() => setPasswordOpen(true)}
         onSaved={() => void load()}
+        installPrompt={installPrompt}
+        onInstall={onInstall}
       />
     ) : (
       <Home data={data} go={setPage} />
@@ -615,18 +617,25 @@ function Profile({
   onLogout,
   onChangePassword,
   onSaved,
+  installPrompt,
+  onInstall,
 }: {
   data: Overview;
   username: string;
   onLogout: () => void;
   onChangePassword: () => void;
   onSaved: () => void;
+  installPrompt: InstallPromptEvent | null;
+  onInstall: () => Promise<void>;
 }) {
   const [phone, setPhone] = useState(data.member.phone);
   const [editingPhone, setEditingPhone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [installInfoOpen, setInstallInfoOpen] = useState(false);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent);
   async function savePhone(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -664,6 +673,7 @@ function Profile({
       <section aria-labelledby="profile-details" className="space-y-3"><h2 id="profile-details" className="student-display m-0 flex items-center gap-2 text-xl font-bold uppercase tracking-wide text-white"><UserRound size={19} className="text-[#c3f400]" /> Datos personales</h2><div className="space-y-4 rounded-xl border border-[#444933] bg-[#1a2025] p-4"><div><p className="student-display m-0 text-xs font-bold uppercase tracking-wider text-zinc-400">Nombre completo</p><p className="mb-0 mt-1 rounded-lg border border-[#444933] bg-[#090f14] px-3 py-3 text-sm text-zinc-200">{data.member.firstName} {data.member.lastName}</p></div><div><p className="student-display m-0 text-xs font-bold uppercase tracking-wider text-zinc-400">Usuario de acceso</p><p className="mb-0 mt-1 rounded-lg border border-[#444933] bg-[#090f14] px-3 py-3 text-sm text-zinc-200">{username}</p></div><div><div className="flex items-center justify-between gap-2"><p className="student-display m-0 text-xs font-bold uppercase tracking-wider text-zinc-400">Teléfono</p>{!editingPhone && <button type="button" onClick={() => { setPhone(data.member.phone); setNotice(""); setError(""); setEditingPhone(true); }} className="student-display rounded border border-[#444933] bg-[#252b30] px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#c3f400]">Editar</button>}</div>{editingPhone ? <form onSubmit={savePhone} className="mt-2"><label htmlFor="profile-phone" className="sr-only">Teléfono</label><input id="profile-phone" required maxLength={50} type="tel" autoComplete="tel" value={phone} onChange={(event) => { setPhone(event.target.value); setError(""); }} className="w-full rounded-lg border border-[#444933] bg-[#090f14] px-3 py-3 text-base text-white outline-none ring-[#c3f400] focus:ring-2" />{error && <p className="mb-0 mt-2 text-sm text-red-300" role="alert">{error}</p>}<div className="mt-3 flex gap-2"><button type="submit" disabled={busy || !phone.trim() || phone.trim() === data.member.phone} className="student-display flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-[#c3f400] px-3 text-base font-bold uppercase text-[#161e00]"><Save size={16} />{busy ? "Guardando…" : "Guardar"}</button><button type="button" disabled={busy} onClick={() => { setPhone(data.member.phone); setError(""); setEditingPhone(false); }} className="student-display min-h-11 rounded-lg border border-[#444933] bg-[#252b30] px-4 text-base font-bold uppercase text-zinc-200">Cancelar</button></div></form> : <p className="mb-0 mt-1 rounded-lg border border-[#444933] bg-[#090f14] px-3 py-3 text-sm text-zinc-200">{data.member.phone || "Sin teléfono registrado"}</p>}{notice && <p className="mb-0 mt-2 text-sm text-[#c3f400]" role="status">{notice}</p>}</div><p className="m-0 text-xs leading-5 text-zinc-500">Para modificar tu nombre o usuario, consultá en recepción.</p></div></section>
 
       <section aria-labelledby="profile-security" className="space-y-3"><h2 id="profile-security" className="student-display m-0 flex items-center gap-2 text-xl font-bold uppercase tracking-wide text-white"><ShieldCheck size={19} className="text-[#c3f400]" /> Seguridad y acceso</h2><div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#444933] bg-[#1a2025] p-4"><span className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#444933] bg-[#090f14] text-[#c3f400]"><KeyRound size={19} /></span><div className="min-w-0 flex-1"><strong className="student-display block text-lg font-bold uppercase text-white">Contraseña de alumno</strong><span className="text-xs text-zinc-400">Actualizá tu contraseña personal.</span></div><button type="button" onClick={onChangePassword} className="student-display min-h-10 rounded-lg border border-[#444933] bg-[#252b30] px-3 text-sm font-bold uppercase tracking-wide text-[#c3f400]">Cambiar</button></div></section>
+      <section aria-labelledby="profile-install" className="space-y-3"><h2 id="profile-install" className="student-display m-0 flex items-center gap-2 text-xl font-bold uppercase tracking-wide text-white"><Download size={19} className="text-[#c3f400]" /> Aplicación</h2><div className="rounded-xl border border-[#444933] bg-[#1a2025] p-4"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-lg border border-[#444933] bg-[#090f14] text-[#c3f400]"><Download size={19} /></span><div className="min-w-0 flex-1"><strong className="student-display block text-lg font-bold uppercase text-white">Legado Gym en tu inicio</strong><span className="mt-1 block text-xs leading-5 text-zinc-400">{isStandalone ? "La aplicación ya está instalada en este dispositivo." : "Si eliminaste la app o cambiás de celular, podés instalarla nuevamente."}</span></div></div>{!isStandalone && <div className="mt-4">{installPrompt ? <button type="button" onClick={() => void onInstall()} className="student-display flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#c3f400] px-3 text-base font-bold uppercase text-[#161e00]"><Download size={16} /> Instalar aplicación</button> : <button type="button" onClick={() => setInstallInfoOpen((open) => !open)} className="student-display flex min-h-11 w-full items-center justify-between rounded-lg border border-[#c3f400]/50 bg-[#c3f400]/10 px-3 text-left text-base font-bold uppercase text-[#c3f400]"><span>{isAppleMobile ? "Instalar en iPhone" : "Cómo instalar"}</span><ChevronRight size={17} className={installInfoOpen ? "rotate-90" : ""} /></button>}{installInfoOpen && <p className="mb-0 mt-3 rounded-lg border border-[#444933] bg-[#090f14] px-3 py-3 text-sm leading-6 text-zinc-300">{isAppleMobile ? <>Abrí esta página con <strong className="text-white">Safari</strong>, tocá <strong className="text-white">Compartir</strong> y elegí <strong className="text-white">“Agregar a inicio”</strong>.</> : <>Abrí el menú del navegador y elegí <strong className="text-white">“Instalar app”</strong> o <strong className="text-white">“Agregar a pantalla de inicio”</strong>.</>}</p>}</div>}</div></section>
       <button type="button" onClick={onLogout} className="student-display flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-red-400/40 bg-red-400/10 px-4 text-lg font-bold uppercase tracking-wide text-red-300 transition hover:bg-red-400/20"><LogOut size={18} /> Cerrar sesión</button>
     </div>
   );
