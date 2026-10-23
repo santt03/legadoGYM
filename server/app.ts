@@ -5,6 +5,8 @@ import { registerPlanRoutes } from './plans.js'
 import { registerDietRoutes } from './diets.js'
 import { registerAuth } from './auth.js'
 import { registerSettingsRoutes } from './settings.js'
+import { hashPassword } from './auth.js'
+import { registerStudentRoutes } from './student.js'
 
 const date = z.iso.date()
 const memberInput = z.object({
@@ -68,6 +70,25 @@ app.get('/api/members', async (c) => {
   return c.json(result.rows.map(mapMember))
 })
 
+app.get('/api/dashboard/student-engagement', async (c) => {
+  const summary = await pool.query<{ total_accounts: string; activated_accounts: string; trained_this_week: string }>(
+    `SELECT
+      count(*) FILTER (WHERE u.role='MEMBER') AS total_accounts,
+      count(*) FILTER (WHERE u.role='MEMBER' AND NOT u.force_password_change) AS activated_accounts,
+      (SELECT count(DISTINCT member_id) FROM member_workout_completions WHERE completed_at >= date_trunc('week', CURRENT_DATE)::date) AS trained_this_week
+     FROM users u WHERE u.gym_id=$1`, [GYM_ID],
+  )
+  const inactive = await pool.query<{ id: string; firstName: string; lastName: string; phone: string; lastLoginAt: Date | null; daysSinceLogin: number | null }>(
+    `SELECT m.id,m.first_name AS "firstName",m.last_name AS "lastName",m.phone,u.last_login_at AS "lastLoginAt",
+       CASE WHEN u.last_login_at IS NULL THEN NULL ELSE floor(extract(epoch FROM (now()-u.last_login_at))/86400)::int END AS "daysSinceLogin"
+     FROM members m LEFT JOIN users u ON u.member_id=m.id AND u.role='MEMBER'
+     WHERE m.gym_id=$1 AND NOT m.inactive AND (u.last_login_at IS NULL OR u.last_login_at < now()-interval '14 days')
+     ORDER BY u.last_login_at NULLS FIRST,m.last_name,m.first_name LIMIT 8`, [GYM_ID],
+  )
+  const row = summary.rows[0]
+  return c.json({ totalAccounts: Number(row.total_accounts), activatedAccounts: Number(row.activated_accounts), trainedThisWeek: Number(row.trained_this_week), inactive })
+})
+
 // Consulta estable para el futuro lector de huellas: la identidad biométrica
 // podrá resolver el DNI y usar esta misma regla de acceso.
 app.get('/api/members/eligibility', async (c) => {
@@ -88,18 +109,30 @@ app.post('/api/members', async (c) => {
   const parsed = memberInput.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'Datos inválidos', details: parsed.error.flatten() }, 400)
   const m = parsed.data
-  const result = await pool.query<DbMember>(
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query<DbMember>(
     `INSERT INTO members (id, gym_id, first_name, last_name, dni, phone, birth_date, weight_kg,
       objective, start_date, end_date, inactive)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-    [crypto.randomUUID(), GYM_ID, m.firstName, m.lastName, m.dni, m.phone, m.birthDate,
-      m.weightKg, m.objective, m.startDate, m.endDate, m.inactive],
-  ).catch((error: { code?: string; constraint?: string }) => {
-    if (error.code === '23505' && error.constraint === 'members_gym_dni_idx') return null
+      [crypto.randomUUID(), GYM_ID, m.firstName, m.lastName, m.dni, m.phone, m.birthDate,
+        m.weightKg, m.objective, m.startDate, m.endDate, m.inactive],
+    )
+    const member = result.rows[0]
+    const initialPassword = process.env.MEMBER_INITIAL_PASSWORD || 'legado2026'
+    await client.query(
+      'INSERT INTO users (id,gym_id,username,name,role,member_id,password_hash,force_password_change) VALUES ($1,$2,$3,$4,$5,$6,$7,true)',
+      [crypto.randomUUID(), GYM_ID, m.dni, `${m.firstName} ${m.lastName}`, 'MEMBER', member.id, await hashPassword(initialPassword)],
+    )
+    await client.query('COMMIT')
+    return c.json({ ...mapMember(member), studentAccount: { username: m.dni, initialPassword } }, 201)
+  } catch (error: unknown) {
+    await client.query('ROLLBACK')
+    const dbError = error as { code?: string; constraint?: string }
+    if (dbError.code === '23505') return c.json({ error: 'Ya existe un socio o una cuenta con ese DNI' }, 409)
     throw error
-  })
-  if (!result) return c.json({ error: 'Ya existe un socio con ese DNI' }, 409)
-  return c.json(mapMember(result.rows[0]), 201)
+  } finally { client.release() }
 })
 
 app.put('/api/members/:id', async (c) => {
@@ -107,6 +140,8 @@ app.put('/api/members/:id', async (c) => {
   const parsed = memberInput.safeParse(await c.req.json().catch(() => null))
   if (!id.success || !parsed.success) return c.json({ error: 'Datos inválidos' }, 400)
   const m = parsed.data
+  const conflictingAccount = await pool.query('SELECT 1 FROM users WHERE gym_id=$1 AND lower(username)=lower($2) AND (member_id IS NULL OR member_id<>$3) LIMIT 1', [GYM_ID, m.dni, id.data])
+  if (conflictingAccount.rowCount) return c.json({ error: 'Ese DNI ya está asociado a otra cuenta' }, 409)
   const result = await pool.query<DbMember>(
     `UPDATE members SET first_name=$3, last_name=$4, dni=$5, phone=$6, birth_date=$7,
       weight_kg=$8, objective=$9, start_date=$10, end_date=$11,
@@ -119,7 +154,31 @@ app.put('/api/members/:id', async (c) => {
   })
   if (!result) return c.json({ error: 'Ya existe un socio con ese DNI' }, 409)
   if (!result.rows[0]) return c.json({ error: 'Socio no encontrado' }, 404)
+  await pool.query('UPDATE users SET username=$2,name=$3 WHERE member_id=$1 AND gym_id=$4', [id.data, m.dni, `${m.firstName} ${m.lastName}`, GYM_ID])
   return c.json(mapMember(result.rows[0]))
+})
+
+app.post('/api/members/:id/reset-student-access', async (c) => {
+  const id = z.string().uuid().safeParse(c.req.param('id'))
+  if (!id.success) return c.json({ error: 'ID inválido' }, 400)
+  const member = await pool.query<{ dni: string }>('SELECT dni FROM members WHERE id=$1 AND gym_id=$2', [id.data, GYM_ID])
+  if (!member.rows[0]?.dni) return c.json({ error: 'El socio no tiene DNI cargado' }, 400)
+  const initialPassword = process.env.MEMBER_INITIAL_PASSWORD || 'legado2026'
+  const result = await pool.query('UPDATE users SET password_hash=$2,force_password_change=true WHERE member_id=$1 AND gym_id=$3 AND role=$4', [id.data, await hashPassword(initialPassword), GYM_ID, 'MEMBER'])
+  if (!result.rowCount) return c.json({ error: 'La cuenta del alumno no existe' }, 404)
+  await pool.query('DELETE FROM admin_sessions WHERE user_id IN (SELECT id FROM users WHERE member_id=$1 AND gym_id=$2)', [id.data, GYM_ID])
+  return c.json({ username: member.rows[0].dni, initialPassword })
+})
+
+app.get('/api/members/:id/student-access', async (c) => {
+  const id = z.string().uuid().safeParse(c.req.param('id'))
+  if (!id.success) return c.json({ error: 'ID inválido' }, 400)
+  const result = await pool.query<{ username: string; force_password_change: boolean }>(
+    `SELECT u.username,u.force_password_change FROM users u
+     JOIN members m ON m.id=u.member_id
+     WHERE m.id=$1 AND m.gym_id=$2 AND u.role='MEMBER'`, [id.data, GYM_ID],
+  )
+  return c.json(result.rows[0] ? { exists: true, username: result.rows[0].username, forcePasswordChange: result.rows[0].force_password_change } : { exists: false })
 })
 
 app.post('/api/members/:id/renew', async (c) => {
@@ -153,5 +212,6 @@ app.delete('/api/members/:id', async (c) => {
 registerPlanRoutes(app)
 registerDietRoutes(app)
 registerSettingsRoutes(app)
+registerStudentRoutes(app)
 
 export default app

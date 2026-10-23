@@ -1,0 +1,15 @@
+@layer theme, base, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme { --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif; }
+
+/* Tailwind utilities are imported without Preflight so the admin panel keeps its
+   existing styling. Reset only the mobile portal's native form controls. */
+.student-shell { color-scheme: dark; }
+.student-display { font-family: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif; }
+@layer base {
+  .student-shell button { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; }
+  .student-shell input { color: inherit; font: inherit; }
+}
+.student-shell button:focus-visible, .student-shell input:focus-visible { outline: 2px solid #bef264; outline-offset: 3px; }

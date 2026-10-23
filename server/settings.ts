@@ -16,6 +16,11 @@ const gymInput = z.object({
   name: z.string().trim().min(2).max(100),
   logoDataUrl: z.union([z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/).max(1_100_000), z.null()]),
   defaultMembershipMonths: z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12)]),
+  address: z.string().trim().max(180),
+  whatsapp: z.string().trim().max(40),
+  instagram: z.string().trim().max(80),
+  openingHours: z.string().trim().max(500),
+  mapsUrl: z.union([z.string().trim().url().max(500), z.literal('')]),
 })
 const run = promisify(execFile)
 const localBackupsAvailable = process.env.VERCEL !== '1'
@@ -31,18 +36,18 @@ function backupEnv() {
 
 export function registerSettingsRoutes(app: Hono) {
   app.get('/api/public/gym', async (c) => {
-    const result = await pool.query('SELECT name,logo_data_url AS "logoDataUrl" FROM gyms WHERE id=$1', [GYM_ID])
+    const result = await pool.query('SELECT name,logo_data_url AS "logoDataUrl",address,whatsapp,instagram,opening_hours AS "openingHours",maps_url AS "mapsUrl" FROM gyms WHERE id=$1', [GYM_ID])
     return c.json(result.rows[0] || { name: 'Legado Gym', logoDataUrl: null })
   })
   app.get('/api/settings', async (c) => {
-    const result = await pool.query('SELECT name,logo_data_url AS "logoDataUrl",default_membership_months AS "defaultMembershipMonths" FROM gyms WHERE id=$1', [GYM_ID])
+    const result = await pool.query('SELECT name,logo_data_url AS "logoDataUrl",default_membership_months AS "defaultMembershipMonths",address,whatsapp,instagram,opening_hours AS "openingHours",maps_url AS "mapsUrl" FROM gyms WHERE id=$1', [GYM_ID])
     return result.rows[0] ? c.json(result.rows[0]) : c.json({ error: 'Gimnasio no encontrado' }, 404)
   })
   app.put('/api/settings', async (c) => {
     const parsed = gymInput.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'Configuración inválida. Revisá el nombre, logo y duración de membresía.' }, 400)
-    const { name, logoDataUrl, defaultMembershipMonths } = parsed.data
-    const result = await pool.query('UPDATE gyms SET name=$2,logo_data_url=$3,default_membership_months=$4 WHERE id=$1 RETURNING name,logo_data_url AS "logoDataUrl",default_membership_months AS "defaultMembershipMonths"', [GYM_ID, name, logoDataUrl, defaultMembershipMonths])
+    const { name, logoDataUrl, defaultMembershipMonths, address, whatsapp, instagram, openingHours, mapsUrl } = parsed.data
+    const result = await pool.query('UPDATE gyms SET name=$2,logo_data_url=$3,default_membership_months=$4,address=$5,whatsapp=$6,instagram=$7,opening_hours=$8,maps_url=$9 WHERE id=$1 RETURNING name,logo_data_url AS "logoDataUrl",default_membership_months AS "defaultMembershipMonths",address,whatsapp,instagram,opening_hours AS "openingHours",maps_url AS "mapsUrl"', [GYM_ID, name, logoDataUrl, defaultMembershipMonths, address, whatsapp, instagram, openingHours, mapsUrl])
     return c.json(result.rows[0])
   })
   app.get('/api/settings/users', async (c) => {

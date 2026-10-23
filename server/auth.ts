@@ -1,6 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import type { Hono } from 'hono'
+import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { z } from 'zod'
 import { pool, GYM_ID } from './db.js'
@@ -28,6 +29,19 @@ async function verifyPassword(password: string, stored: string) {
 
 function tokenHash(token: string) { return createHash('sha256').update(token).digest('hex') }
 
+export type SessionUser = { id: string; username: string; name: string; role: 'ADMIN' | 'TRAINER' | 'MEMBER'; memberId: string | null; forcePasswordChange: boolean }
+
+export async function sessionUser(c: Context): Promise<SessionUser | null> {
+  const token = getCookie(c, COOKIE)
+  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null
+  const result = await pool.query<SessionUser>(
+    `SELECT u.id,u.username,u.name,u.role,u.member_id AS "memberId",u.force_password_change AS "forcePasswordChange"
+     FROM admin_sessions s JOIN users u ON u.id=s.user_id
+     WHERE s.token_hash=$1 AND s.expires_at>now() AND u.gym_id=$2`, [tokenHash(token), GYM_ID],
+  )
+  return result.rows[0] || null
+}
+
 export function registerAuth(app: Hono) {
   app.use('/api/*', async (c, next) => {
     const path = c.req.path
@@ -36,15 +50,13 @@ export function registerAuth(app: Hono) {
       return c.json({ error: 'Solicitud no permitida' }, 403)
     }
     if (path === '/api/auth/login') return next()
-    const token = getCookie(c, COOKIE)
-    if (!token || !/^[a-f0-9]{64}$/.test(token)) return c.json({ error: 'Sesión requerida' }, 401)
-    const result = await pool.query<{ id: string; username: string; role: string }>(
-      `SELECT u.id,u.username,u.role FROM admin_sessions s JOIN users u ON u.id=s.user_id
-       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.gym_id=$2`, [tokenHash(token), GYM_ID],
-    )
-    if (!result.rows[0]) return c.json({ error: 'Sesión vencida' }, 401)
-    const role = result.rows[0].role
-    if (role !== 'ADMIN' && role !== 'TRAINER') return c.json({ error: 'Rol no permitido' }, 403)
+    const user = await sessionUser(c)
+    if (!user) return c.json({ error: 'Sesión vencida' }, 401)
+    const role = user.role
+    if (role === 'MEMBER') {
+      if (path.startsWith('/api/student/') || path === '/api/auth/me' || path === '/api/auth/logout' || path === '/api/auth/password') return next()
+      return c.json({ error: 'Rol no permitido' }, 403)
+    }
     if (role !== 'ADMIN' && (path.startsWith('/api/settings/users') || path.startsWith('/api/settings/backups'))) return c.json({ error: 'Esta acción requiere permisos de administrador' }, 403)
     if (role !== 'ADMIN' && !['GET', 'HEAD'].includes(c.req.method)) {
       if (path.startsWith('/api/settings') || path.startsWith('/api/members/') || path === '/api/members' || (path.startsWith('/api/exercises/') && c.req.method === 'DELETE') || (path.startsWith('/api/muscle-groups/') && c.req.method === 'DELETE') || (path.startsWith('/api/foods/') && c.req.method === 'DELETE') || (path.startsWith('/api/food-groups/') && c.req.method === 'DELETE') || (path.startsWith('/api/plans/') && c.req.method === 'DELETE') || (path.startsWith('/api/diets/') && c.req.method === 'DELETE')) {
@@ -62,8 +74,8 @@ export function registerAuth(app: Hono) {
     if (failure && failure.until > Date.now() && failure.count >= 5) {
       return c.json({ error: 'Demasiados intentos. Probá de nuevo en 15 minutos.' }, 429)
     }
-    const user = await pool.query<{ id: string; username: string; name: string; role: string; password_hash: string }>(
-      'SELECT id,username,name,role,password_hash FROM users WHERE lower(username)=lower($1) AND gym_id=$2',
+    const user = await pool.query<{ id: string; username: string; name: string; role: 'ADMIN' | 'TRAINER' | 'MEMBER'; password_hash: string; member_id: string | null; force_password_change: boolean }>(
+      'SELECT id,username,name,role,password_hash,member_id,force_password_change FROM users WHERE lower(username)=lower($1) AND gym_id=$2',
       [parsed.data.username, GYM_ID],
     )
     const row = user.rows[0]
@@ -72,25 +84,32 @@ export function registerAuth(app: Hono) {
       return c.json({ error: 'Usuario o contraseña inválidos' }, 401)
     }
     failedLogins.delete(key)
+    await pool.query('UPDATE users SET last_login_at=now() WHERE id=$1', [row.id])
     const token = randomBytes(32).toString('hex')
     await pool.query('INSERT INTO admin_sessions (token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval \'12 hours\')', [tokenHash(token), row.id])
     setCookie(c, COOKIE, token, { httpOnly: true, sameSite: 'Strict', secure: process.env.COOKIE_SECURE === 'true', path: '/api', maxAge: SESSION_SECONDS })
-    return c.json({ id: row.id, username: row.username, name: row.name, role: row.role })
+    return c.json({ id: row.id, username: row.username, name: row.name, role: row.role, memberId: row.member_id, forcePasswordChange: row.force_password_change })
   })
 
   app.get('/api/auth/me', async (c) => {
-    const token = getCookie(c, COOKIE)!
-    const result = await pool.query<{ id: string; username: string; name: string; role: string }>(
-      `SELECT u.id,u.username,u.name,u.role FROM admin_sessions s JOIN users u ON u.id=s.user_id
-       WHERE s.token_hash=$1 AND s.expires_at>now() AND u.gym_id=$2`, [tokenHash(token), GYM_ID],
-    )
-    return c.json(result.rows[0])
+    return c.json(await sessionUser(c))
   })
 
   app.post('/api/auth/logout', async (c) => {
     const token = getCookie(c, COOKIE)
     if (token) await pool.query('DELETE FROM admin_sessions WHERE token_hash=$1', [tokenHash(token)])
     deleteCookie(c, COOKIE, { path: '/api' })
+    return c.body(null, 204)
+  })
+
+  app.put('/api/auth/password', async (c) => {
+    const user = await sessionUser(c)
+    const parsed = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(8).max(200) }).safeParse(await c.req.json().catch(() => null))
+    if (!user || !parsed.success) return c.json({ error: 'Datos inválidos. La nueva contraseña debe tener al menos 8 caracteres.' }, 400)
+    const stored = await pool.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id=$1', [user.id])
+    if (!stored.rows[0] || !await verifyPassword(parsed.data.currentPassword, stored.rows[0].password_hash)) return c.json({ error: 'La contraseña actual no es correcta' }, 400)
+    await pool.query('UPDATE users SET password_hash=$2,force_password_change=false WHERE id=$1', [user.id, await hashPassword(parsed.data.newPassword)])
+    await pool.query('DELETE FROM admin_sessions WHERE user_id=$1 AND token_hash<>$2', [user.id, tokenHash(getCookie(c, COOKIE)! )])
     return c.body(null, 204)
   })
 }

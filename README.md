@@ -4,6 +4,12 @@ Panel administrativo de Legado Gym. Incluye acceso con usuario y contraseña, so
 
 La fase 3 permite exportar cada plan guardado como PDF A4. El documento incluye la identidad del gimnasio, los datos disponibles del socio, fechas de las cuatro semanas, días y ejercicios con series, repeticiones, carga, descanso y observaciones. El botón de exportación se deshabilita cuando hay cambios sin guardar.
 
+## Portal de alumnos
+
+La ruta `/alumno` ofrece una experiencia móvil instalable (PWA) para los socios. Al crear un socio, el sistema crea automáticamente su cuenta: el usuario es su DNI y la contraseña inicial es `legado2026` (o el valor de `MEMBER_INITIAL_PASSWORD`). El alumno debe reemplazarla en su primer ingreso.
+
+El portal comparte la misma base de datos, pero cada alumno solo puede consultar su propia membresía, rutina y dieta. No se exponen las rutas administrativas.
+
 ## Requisitos
 
 - Node.js 22 o superior y npm.

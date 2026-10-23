@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS gyms (
 );
 ALTER TABLE gyms ADD COLUMN IF NOT EXISTS logo_data_url text;
 ALTER TABLE gyms ADD COLUMN IF NOT EXISTS default_membership_months integer NOT NULL DEFAULT 1;
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT '';
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS whatsapp text NOT NULL DEFAULT '';
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS instagram text NOT NULL DEFAULT '';
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS opening_hours text NOT NULL DEFAULT '';
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS maps_url text NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY,
@@ -15,9 +20,18 @@ CREATE TABLE IF NOT EXISTS users (
   username text UNIQUE,
   password_hash text,
   name text NOT NULL,
-  role text NOT NULL CHECK (role IN ('ADMIN', 'TRAINER')),
+  role text NOT NULL CHECK (role IN ('ADMIN', 'TRAINER', 'MEMBER')),
+  member_id uuid UNIQUE,
+  force_password_change boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('ADMIN', 'TRAINER', 'MEMBER'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS member_id uuid;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS force_password_change boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+CREATE UNIQUE INDEX IF NOT EXISTS users_member_id_unique_idx ON users(member_id) WHERE member_id IS NOT NULL;
 
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS username text;
@@ -50,6 +64,12 @@ CREATE TABLE IF NOT EXISTS members (
   CONSTRAINT valid_period CHECK (end_date >= start_date),
   CONSTRAINT valid_weight CHECK (weight_kg IS NULL OR weight_kg > 0)
 );
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_member_id_fkey') THEN
+    ALTER TABLE users ADD CONSTRAINT users_member_id_fkey FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS members_gym_name_idx ON members (gym_id, last_name, first_name);
 CREATE INDEX IF NOT EXISTS members_gym_end_date_idx ON members (gym_id, end_date);
@@ -120,6 +140,27 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
   rest_seconds integer CHECK (rest_seconds IS NULL OR rest_seconds >= 0),
   notes text NOT NULL DEFAULT '',
   UNIQUE (day_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS member_workout_completions (
+  id uuid PRIMARY KEY,
+  member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  plan_id uuid NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
+  day_id uuid NOT NULL REFERENCES training_days(id) ON DELETE CASCADE,
+  completed_at date NOT NULL DEFAULT CURRENT_DATE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (member_id, day_id)
+);
+CREATE INDEX IF NOT EXISTS member_workout_completions_member_date_idx ON member_workout_completions(member_id, completed_at DESC);
+
+CREATE TABLE IF NOT EXISTS member_push_subscriptions (
+  id uuid PRIMARY KEY,
+  member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  endpoint text NOT NULL UNIQUE,
+  p256dh text NOT NULL,
+  auth text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 INSERT INTO gyms (id, name) VALUES ('00000000-0000-4000-8000-000000000001', 'Legado Gym')

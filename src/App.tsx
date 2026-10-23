@@ -1,73 +1,1165 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, ArrowRight, CalendarDays, ClipboardList, Dumbbell, KeyRound, LayoutDashboard, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, Users, X } from 'lucide-react'
-import logo from './assets/legado-mark.svg'
-import { Plans } from './Plans'
-import { useConfirmDialog } from './useConfirmDialog'
-import { Settings, type GymSettings } from './Settings'
-import { UsageGuide } from './UsageGuide'
-import { AccessControl } from './AccessControl'
-import './App.css'
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowRight,
+  CalendarDays,
+  ClipboardList,
+  Dumbbell,
+  KeyRound,
+  LayoutDashboard,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Settings2,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import logo from "./assets/legado-mark.svg";
+import { Plans } from "./Plans";
+import { useConfirmDialog } from "./useConfirmDialog";
+import { Settings, type GymSettings } from "./Settings";
+import { UsageGuide } from "./UsageGuide";
+import { AccessControl } from "./AccessControl";
+import "./App.css";
 
-type Member = { id: string; firstName: string; lastName: string; dni: string | null; phone: string; birthDate: string | null; weightKg: number | null; objective: string; startDate: string; endDate: string; inactive: boolean; createdAt: string }
-type MemberInput = Omit<Member, 'id' | 'createdAt'>
-type Filter = 'all' | 'active' | 'soon' | 'expired' | 'inactive' | 'pending'
-const labels = { active: 'Activo', soon: 'Por vencer', expired: 'Vencido', inactive: 'Inactivo', pending: 'Pendiente' }
-function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
-function showDate(value: string | null) { if (!value) return '—'; const [y,m,d] = value.slice(0,10).split('-'); return `${d}/${m}/${y}` }
-function daysUntil(value: string) { const [y,m,d] = value.slice(0,10).split('-').map(Number); const [ty,tm,td] = today().split('-').map(Number); return Math.round((Date.UTC(y,m-1,d)-Date.UTC(ty,tm-1,td))/86400000) }
-function status(m: Member): Exclude<Filter,'all'> { if (m.inactive) return 'inactive'; if (m.startDate>today()) return 'pending'; const days=daysUntil(m.endDate); return days<0?'expired':days<=7?'soon':'active' }
-async function api<T>(path: string, options?: RequestInit): Promise<T> { const res=await fetch(`/api${path}`,{...options,headers:{'Content-Type':'application/json','X-Legado-Request':'1',...options?.headers}}); if(res.status===401)window.dispatchEvent(new Event('legado:session-expired'));if(!res.ok){const body=await res.json().catch(()=>({}));throw new Error(body.error || 'Error de conexión')};return res.status===204?undefined as T:res.json() }
-const blank = (months: number): MemberInput => { const start=new Date(); const y=start.getFullYear(),m=start.getMonth(),day=start.getDate(); const nextMonthDays=new Date(y,m+months+1,0).getDate(); const end=new Date(y,m+months,Math.min(day,nextMonthDays)-1); return {firstName:'',lastName:'',dni:'',phone:'',birthDate:null,weightKg:null,objective:'',startDate:today(),endDate:`${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`,inactive:false} }
-
-function MemberForm({member,onSave,onClose,busy,defaultMonths}:{member?:Member;onSave:(data:MemberInput)=>void;onClose:()=>void;busy:boolean;defaultMonths:number}) {
-  const [form,setForm]=useState<MemberInput>(member?{firstName:member.firstName,lastName:member.lastName,dni:member.dni,phone:member.phone,birthDate:member.birthDate,weightKg:member.weightKg,objective:member.objective,startDate:member.startDate,endDate:member.endDate,inactive:member.inactive}:blank(defaultMonths))
-  const set=<K extends keyof MemberInput>(key:K,value:MemberInput[K])=>setForm(p=>({...p,[key]:value}))
-  return <div className="backdrop" onMouseDown={onClose}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="form-title" onMouseDown={e=>e.stopPropagation()}><div className="modal-title"><div><small>SOCIOS</small><h2 id="form-title">{member?'Editar socio':'Nuevo socio'}</h2></div><button className="icon" onClick={onClose} aria-label="Cerrar"><X size={18}/></button></div><form onSubmit={e=>{e.preventDefault();onSave(form)}}><div className="form-grid"><label>Nombre<input required maxLength={100} value={form.firstName} onChange={e=>set('firstName',e.target.value)}/></label><label>Apellido<input required maxLength={100} value={form.lastName} onChange={e=>set('lastName',e.target.value)}/></label><label>DNI<input required inputMode="numeric" pattern="[0-9]{7,8}" title="Ingresá 7 u 8 números, sin puntos" maxLength={8} value={form.dni||''} onChange={e=>set('dni',e.target.value.replace(/\D/g,''))}/></label><label>Teléfono<input required maxLength={50} value={form.phone} onChange={e=>set('phone',e.target.value)}/></label><label>Fecha de nacimiento<input type="date" value={form.birthDate||''} onChange={e=>set('birthDate',e.target.value||null)}/></label><label>Peso (kg)<input type="number" min="1" max="999" step="0.01" value={form.weightKg??''} onChange={e=>set('weightKg',e.target.value?Number(e.target.value):null)}/></label><label>Fecha de inicio<input required type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)}/></label><label>Vencimiento<input required type="date" min={form.startDate} value={form.endDate} onChange={e=>set('endDate',e.target.value)}/></label></div><label>Objetivo<textarea rows={3} maxLength={500} value={form.objective} onChange={e=>set('objective',e.target.value)}/></label><label className="checkbox"><input type="checkbox" checked={form.inactive} onChange={e=>set('inactive',e.target.checked)}/> Marcar como inactivo</label><div className="actions"><button type="button" className="button secondary" onClick={onClose}>Cancelar</button><button className="button primary" disabled={busy||form.endDate<form.startDate}>{busy?'Guardando…':member?'Guardar cambios':'Crear socio'}</button></div></form></div></div>
+type Member = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dni: string | null;
+  phone: string;
+  birthDate: string | null;
+  weightKg: number | null;
+  objective: string;
+  startDate: string;
+  endDate: string;
+  inactive: boolean;
+  createdAt: string;
+};
+type MemberInput = Omit<Member, "id" | "createdAt">;
+type StudentAccess = {
+  exists: boolean;
+  username?: string;
+  forcePasswordChange?: boolean;
+};
+type StudentEngagement = {
+  totalAccounts: number;
+  activatedAccounts: number;
+  trainedThisWeek: number;
+  inactive: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    lastLoginAt: string | null;
+    daysSinceLogin: number | null;
+  }>;
+};
+type Filter = "all" | "active" | "soon" | "expired" | "inactive" | "pending";
+const labels = {
+  active: "Activo",
+  soon: "Por vencer",
+  expired: "Vencido",
+  inactive: "Inactivo",
+  pending: "Pendiente",
+};
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+function showDate(value: string | null) {
+  if (!value) return "—";
+  const [y, m, d] = value.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+function daysUntil(value: string) {
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  const [ty, tm, td] = today().split("-").map(Number);
+  return Math.round(
+    (Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86400000,
+  );
+}
+function status(m: Member): Exclude<Filter, "all"> {
+  if (m.inactive) return "inactive";
+  if (m.startDate > today()) return "pending";
+  const days = daysUntil(m.endDate);
+  return days < 0 ? "expired" : days <= 7 ? "soon" : "active";
+}
+async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Legado-Request": "1",
+      ...options?.headers,
+    },
+  });
+  if (res.status === 401)
+    window.dispatchEvent(new Event("legado:session-expired"));
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || "Error de conexión");
+  }
+  return res.status === 204 ? (undefined as T) : res.json();
+}
+const blank = (months: number): MemberInput => {
+  const start = new Date();
+  const y = start.getFullYear(),
+    m = start.getMonth(),
+    day = start.getDate();
+  const nextMonthDays = new Date(y, m + months + 1, 0).getDate();
+  const end = new Date(y, m + months, Math.min(day, nextMonthDays) - 1);
+  return {
+    firstName: "",
+    lastName: "",
+    dni: "",
+    phone: "",
+    birthDate: null,
+    weightKg: null,
+    objective: "",
+    startDate: today(),
+    endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`,
+    inactive: false,
+  };
+};
 
-function RenewalDialog({ member, busy, error, defaultMonths, onClose, onConfirm }: { member: Member; busy: boolean; error: string; defaultMonths: 1 | 3 | 6 | 12; onClose: () => void; onConfirm: (months: 1 | 3 | 6 | 12) => void }) {
-  const [months, setMonths] = useState<1 | 3 | 6 | 12>(defaultMonths)
-  return <div className="backdrop" onMouseDown={() => { if (!busy) onClose() }}>
-    <div className="modal renewal-modal" role="dialog" aria-modal="true" aria-labelledby="renewal-title" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="modal-title"><div><small>RENOVACIÓN DE MEMBRESÍA</small><h2 id="renewal-title">Renovar a {member.firstName} {member.lastName}</h2></div><button type="button" className="icon" aria-label="Cerrar" disabled={busy} onClick={onClose}><X size={18} /></button></div>
-      <p className="renewal-intro">Elegí cuántos meses querés agregar a la membresía de este socio.</p>
-      <div className="renewal-current"><CalendarDays size={18} /><span>Vencimiento actual <strong>{showDate(member.endDate)}</strong></span></div>
-      <div className="renewal-options" role="group" aria-label="Meses de renovación">{([1, 3, 6, 12] as const).map((value) => <button type="button" key={value} className={months === value ? 'renewal-option picked' : 'renewal-option'} aria-pressed={months === value} onClick={() => setMonths(value)}><strong>{value}</strong><span>{value === 1 ? 'mes' : 'meses'}</span></button>)}</div>
-      {error && <div className="alert" role="alert">{error}</div>}
-      <div className="actions"><button type="button" className="button secondary" disabled={busy} onClick={onClose}>Cancelar</button><button type="button" className="button primary" disabled={busy} onClick={() => onConfirm(months)}><RotateCcw size={16} /> {busy ? 'Renovando…' : 'Confirmar renovación'}</button></div>
+function MemberForm({
+  member,
+  onSave,
+  onClose,
+  busy,
+  defaultMonths,
+}: {
+  member?: Member;
+  onSave: (data: MemberInput) => void;
+  onClose: () => void;
+  busy: boolean;
+  defaultMonths: number;
+}) {
+  const [form, setForm] = useState<MemberInput>(
+    member
+      ? {
+          firstName: member.firstName,
+          lastName: member.lastName,
+          dni: member.dni,
+          phone: member.phone,
+          birthDate: member.birthDate,
+          weightKg: member.weightKg,
+          objective: member.objective,
+          startDate: member.startDate,
+          endDate: member.endDate,
+          inactive: member.inactive,
+        }
+      : blank(defaultMonths),
+  );
+  const set = <K extends keyof MemberInput>(key: K, value: MemberInput[K]) =>
+    setForm((p) => ({ ...p, [key]: value }));
+  return (
+    <div className="backdrop" onMouseDown={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="form-title"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-title">
+          <div>
+            <small>SOCIOS</small>
+            <h2 id="form-title">{member ? "Editar socio" : "Nuevo socio"}</h2>
+          </div>
+          <button className="icon" onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave(form);
+          }}
+        >
+          <div className="form-grid">
+            <label>
+              Nombre
+              <input
+                required
+                maxLength={100}
+                value={form.firstName}
+                onChange={(e) => set("firstName", e.target.value)}
+              />
+            </label>
+            <label>
+              Apellido
+              <input
+                required
+                maxLength={100}
+                value={form.lastName}
+                onChange={(e) => set("lastName", e.target.value)}
+              />
+            </label>
+            <label>
+              DNI
+              <input
+                required
+                inputMode="numeric"
+                pattern="[0-9]{7,8}"
+                title="Ingresá 7 u 8 números, sin puntos"
+                maxLength={8}
+                value={form.dni || ""}
+                onChange={(e) => set("dni", e.target.value.replace(/\D/g, ""))}
+              />
+            </label>
+            <label>
+              Teléfono
+              <input
+                required
+                maxLength={50}
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+              />
+            </label>
+            <label>
+              Fecha de nacimiento
+              <input
+                type="date"
+                value={form.birthDate || ""}
+                onChange={(e) => set("birthDate", e.target.value || null)}
+              />
+            </label>
+            <label>
+              Peso (kg)
+              <input
+                type="number"
+                min="1"
+                max="999"
+                step="0.01"
+                value={form.weightKg ?? ""}
+                onChange={(e) =>
+                  set(
+                    "weightKg",
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
+              />
+            </label>
+            <label>
+              Fecha de inicio
+              <input
+                required
+                type="date"
+                value={form.startDate}
+                onChange={(e) => set("startDate", e.target.value)}
+              />
+            </label>
+            <label>
+              Vencimiento
+              <input
+                required
+                type="date"
+                min={form.startDate}
+                value={form.endDate}
+                onChange={(e) => set("endDate", e.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Objetivo
+            <textarea
+              rows={3}
+              maxLength={500}
+              value={form.objective}
+              onChange={(e) => set("objective", e.target.value)}
+            />
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={form.inactive}
+              onChange={(e) => set("inactive", e.target.checked)}
+            />{" "}
+            Marcar como inactivo
+          </label>
+          <div className="actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={onClose}
+            >
+              Cancelar
+            </button>
+            <button
+              className="button primary"
+              disabled={busy || form.endDate < form.startDate}
+            >
+              {busy ? "Guardando…" : member ? "Guardar cambios" : "Crear socio"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
-  </div>
+  );
 }
 
-function App({ username, role, onLogout }: { username: string; role: 'ADMIN' | 'TRAINER'; onLogout: () => void }){
-  const { confirm, dialog } = useConfirmDialog()
-  const [gymSettings, setGymSettings] = useState<GymSettings | null>(null)
-  const [plansInitialTab, setPlansInitialTab] = useState<'overview' | 'catalog' | 'foods'>('overview')
-  const [guideOpen, setGuideOpen] = useState(false)
-  const [memberPage, setMemberPage] = useState(1)
-  const [page,setPage]=useState<'dashboard'|'access'|'members'|'plans'|'settings'>('dashboard'),[members,setMembers]=useState<Member[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[busy,setBusy]=useState(false),[editing,setEditing]=useState<Member|'new'|null>(null),[selected,setSelected]=useState<Member|null>(null),[renewing,setRenewing]=useState<Member|null>(null),[renewalError,setRenewalError]=useState(''),[query,setQuery]=useState(''),[filter,setFilter]=useState<Filter>('all')
-  async function reload(){try{setLoading(true);setMembers(await api<Member[]>('/members'));setError('')}catch(e){setError(e instanceof Error?e.message:'Error de conexión')}finally{setLoading(false)}}
-  useEffect(()=>{api<Member[]>('/members').then(data=>{setMembers(data);setError('')}).catch(e=>setError(e instanceof Error?e.message:'Error de conexión')).finally(()=>setLoading(false));api<GymSettings>('/settings').then(setGymSettings).catch(()=>{})},[])
-  const counts=useMemo(()=>({all:members.length,active:members.filter(m=>status(m)==='active').length,soon:members.filter(m=>status(m)==='soon').length,expired:members.filter(m=>status(m)==='expired').length,inactive:members.filter(m=>status(m)==='inactive').length,pending:members.filter(m=>status(m)==='pending').length}),[members])
-  const shown=members.filter(m=>(filter==='all'||status(m)===filter)&&`${m.firstName} ${m.lastName} ${m.phone} ${m.dni||''}`.toLocaleLowerCase('es-AR').includes(query.toLocaleLowerCase('es-AR')))
-  const memberPageCount=Math.max(1,Math.ceil(shown.length/15))
-  const currentMemberPage=Math.min(memberPage,memberPageCount)
-  const memberOffset=(currentMemberPage-1)*15
-  const paginatedMembers=shown.slice(memberOffset,memberOffset+15)
-  const upcoming=members.filter(m=>['soon','expired'].includes(status(m))).sort((a,b)=>a.endDate.localeCompare(b.endDate)).slice(0,5)
-  async function save(data:MemberInput){setBusy(true);try{await api(editing&&editing!=='new'?`/members/${editing.id}`:'/members',{method:editing&&editing!=='new'?'PUT':'POST',body:JSON.stringify(data)});setEditing(null);await reload()}catch(e){setError(e instanceof Error?e.message:'No se pudo guardar')}finally{setBusy(false)}}
-  async function renew(months:1|3|6|12){if(!renewing)return;setBusy(true);setRenewalError('');try{await api(`/members/${renewing.id}/renew`,{method:'POST',body:JSON.stringify({months})});setRenewing(null);await reload()}catch(e){setRenewalError(e instanceof Error?e.message:'No se pudo renovar')}finally{setBusy(false)}}
-  async function remove(m:Member){if(!await confirm('¿Eliminar socio?',`Se eliminará a ${m.firstName} ${m.lastName}. Esta acción no se puede deshacer.`))return;try{await api(`/members/${m.id}`,{method:'DELETE'});setSelected(null);await reload()}catch(e){setError(e instanceof Error?e.message:'No se pudo eliminar')}}
-  return <div className="shell"><aside className="sidebar"><div className="brand"><img src={gymSettings?.logoDataUrl || logo} alt=""/><div><strong>{gymSettings?.name || 'LEGADO GYM'}</strong><small>PANEL DE GESTIÓN</small></div></div><p className="nav-label">MENÚ PRINCIPAL</p><nav><button className={page==='dashboard'?'nav current':'nav'} onClick={()=>setPage('dashboard')}><LayoutDashboard size={18}/> Resumen</button><button className={page==='access'?'nav current':'nav'} onClick={()=>setPage('access')}><KeyRound size={18}/> Control de acceso</button><button className={page==='members'?'nav current':'nav'} onClick={()=>setPage('members')}><Users size={18}/> Socios <span>{counts.all}</span></button><button className={page==='plans'?'nav current':'nav'} onClick={()=>{setPlansInitialTab('overview');setPage('plans')}}><ClipboardList size={18}/> Planes por alumno</button>{role==='ADMIN'&&<button className={page==='settings'?'nav current':'nav'} onClick={()=>setPage('settings')}><Settings2 size={18}/> Configuración</button>}</nav><button className="sidebar-help" type="button" onClick={()=>setGuideOpen(true)}><Dumbbell size={19}/> FUERZA EN CADA PASO <span className="help-mark" aria-hidden="true">?</span></button></aside><main><header className="topbar"><span>{gymSettings?.name || 'LEGADO GYM'} <b>/</b> {page==='dashboard'?'RESUMEN':page==='access'?'CONTROL DE ACCESO':page==='members'?'SOCIOS':page==='settings'?'CONFIGURACIÓN':'PLANES POR ALUMNO'}</span><span className="user"><i/> {username} <button className="logout" onClick={onLogout}>Salir</button><strong>LG</strong></span></header><div className="content">{error&&<div className="alert" role="alert">{error}. Verificá la conexión con la API y PostgreSQL. <button onClick={()=>void reload()}>Reintentar</button></div>}{page!=='plans'&&page!=='settings'&&page!=='access'&&<div className="heading"><div><small>{page==='dashboard'?'PANEL GENERAL':'GESTIÓN DE SOCIOS'} ━━━</small><h1>{page==='dashboard'?<>Buen día, <em>equipo Legado.</em></>:<>Socios<em>.</em></>}</h1><p>{page==='dashboard'?`Una vista rápida de tu gimnasio hoy, ${new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})}.`:'Administrá fichas y vencimientos de tu comunidad.'}</p></div>{role==='ADMIN'&&<button className="button primary" onClick={()=>setEditing('new')}><Plus size={18}/> Nuevo socio</button>}</div>}
-    {page==='access'?<AccessControl onRenew={(memberId)=>{const member=members.find((item)=>item.id===memberId);if(member){setRenewing(member);setRenewalError('')}}}/>:page==='dashboard'?<><div className="stats"><Stat icon={<Users/>} label="TOTAL DE SOCIOS" value={counts.all} detail="Registrados en el sistema"/><Stat icon={<Activity/>} label="SOCIOS ACTIVOS" value={counts.active+counts.soon} detail="Con membresía vigente"/><Stat icon={<CalendarDays/>} label="POR VENCER" value={counts.soon} detail="En los próximos 7 días" highlight/><Stat icon={<RotateCcw/>} label="VENCIDOS" value={counts.expired} detail="Pendientes de renovación"/></div><div className="dashboard-grid"><section className="panel"><div className="panel-head"><div><small>ATENCIÓN PRIORITARIA</small><h2>Próximos vencimientos</h2></div><button className="link" onClick={()=>{setPage('members');setFilter('soon');setMemberPage(1)}}>Ver socios <ArrowRight size={16}/></button></div>{loading?<div className="empty">Cargando socios…</div>:upcoming.length?upcoming.map(m=><button className="upcoming" key={m.id} onClick={()=>setSelected(m)}><Avatar m={m}/><span className="name"><strong>{m.firstName} {m.lastName}</strong><small>{m.phone}</small></span><Badge m={m}/><time>{showDate(m.endDate)}</time></button>):<div className="empty">No hay vencimientos próximos.</div>}</section><section className="panel quick"><small>ACCESO RÁPIDO</small><h2>Todo empieza con un socio.</h2><p>Registrá los datos de tus alumnos y mantené sus membresías al día desde un solo lugar.</p><button className="button outline" onClick={()=>setPage('members')}>Gestionar socios <ArrowRight size={17}/></button><Dumbbell className="watermark" size={115}/></section></div></>:page==='members'?<section className="panel member-panel"><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Buscar por nombre, DNI o teléfono…" aria-label="Buscar socios" value={query} onChange={e=>{setQuery(e.target.value);setMemberPage(1)}}/></div><span>{shown.length} socios</span></div><div className="filters">{(['all','active','soon','expired','inactive','pending'] as Filter[]).map(f=><button key={f} className={filter===f?'filter picked':'filter'} onClick={()=>{setFilter(f);setMemberPage(1)}}>{f==='all'?'Todos':labels[f]} <span>{counts[f]}</span></button>)}</div>{loading?<div className="empty">Cargando socios…</div>:shown.length?<><div className="table-wrap"><table><thead><tr><th>SOCIO</th><th>DNI</th><th>TELÉFONO</th><th>VENCIMIENTO</th><th>ESTADO</th><th/></tr></thead><tbody>{paginatedMembers.map(m=><tr key={m.id} onClick={()=>setSelected(m)}><td><div className="name-cell"><Avatar m={m}/><strong>{m.firstName} {m.lastName}</strong></div></td><td>{m.dni||'Pendiente'}</td><td>{m.phone}</td><td>{showDate(m.endDate)}</td><td><Badge m={m}/></td><td><ArrowRight size={17}/></td></tr>)}</tbody></table></div><nav className="member-pagination" aria-label="Paginación de socios"><span>Mostrando {memberOffset+1}–{Math.min(memberOffset+15,shown.length)} de {shown.length} socios</span><div><button className="button secondary" disabled={currentMemberPage===1} onClick={()=>setMemberPage(currentMemberPage-1)}>Anterior</button><span aria-live="polite">Página {currentMemberPage} de {memberPageCount}</span><button className="button secondary" disabled={currentMemberPage===memberPageCount} onClick={()=>setMemberPage(currentMemberPage+1)}>Siguiente</button></div></nav></>:<div className="empty"><Users size={32}/><strong>No hay socios para mostrar</strong><p>{query||filter!=='all'?'Probá otra búsqueda o filtro.':'Creá el primer socio para empezar.'}</p></div>}</section>:page==='settings'&&role==='ADMIN'?(gymSettings?<Settings value={gymSettings} onSaved={setGymSettings} onOpenCatalog={(area)=>{setPlansInitialTab(area==='training'?'catalog':'foods');setPage('plans')}}/>:<div className="empty">Cargando configuración…</div>):<Plans key={plansInitialTab} members={members} role={role} initialTab={plansInitialTab} logoUrl={gymSettings?.logoDataUrl || logo} gymName={gymSettings?.name || 'Legado Gym'}/>}</div></main>
-    {dialog}
-    {guideOpen&&<UsageGuide role={role} onClose={()=>setGuideOpen(false)}/>}
-    {editing&&<MemberForm member={editing==='new'?undefined:editing} onSave={save} onClose={()=>setEditing(null)} busy={busy} defaultMonths={gymSettings?.defaultMembershipMonths || 1}/>}
-    {renewing&&<RenewalDialog member={renewing} busy={busy} error={renewalError} defaultMonths={gymSettings?.defaultMembershipMonths || 1} onClose={()=>{setRenewing(null);setRenewalError('')}} onConfirm={(months)=>void renew(months)}/>}
-    {selected&&<div className="backdrop" onMouseDown={()=>setSelected(null)}><div className="modal detail" role="dialog" aria-modal="true" aria-labelledby="detail-title" onMouseDown={e=>e.stopPropagation()}><div className="modal-title"><div><small>FICHA DEL SOCIO</small><h2 id="detail-title">{selected.firstName} {selected.lastName}</h2></div><button className="icon" aria-label="Cerrar" onClick={()=>setSelected(null)}><X size={18}/></button></div><Badge m={selected}/><div className="detail-grid">{[['DNI',selected.dni||'Pendiente de cargar'],['Teléfono',selected.phone],['Fecha de nacimiento',showDate(selected.birthDate)],['Peso',selected.weightKg?`${selected.weightKg} kg`:'—'],['Inicio',showDate(selected.startDate)],['Vencimiento',showDate(selected.endDate)]].map(([label,value])=><div key={label}><small>{label}</small><strong>{value}</strong></div>)}</div><div className="objective"><small>Objetivo</small><p>{selected.objective||'Sin objetivo registrado'}</p></div><div className="actions">{role==='ADMIN'&&<><button className="button primary" onClick={()=>{setRenewing(selected);setRenewalError('');setSelected(null)}}><RotateCcw size={16}/> Renovar</button><button className="button secondary" onClick={()=>{setEditing(selected);setSelected(null)}}><Pencil size={16}/> Editar</button><button className="button danger" onClick={()=>void remove(selected)}><Trash2 size={16}/> Eliminar</button></>}</div></div></div>}
-  </div>
+function RenewalDialog({
+  member,
+  busy,
+  error,
+  defaultMonths,
+  onClose,
+  onConfirm,
+}: {
+  member: Member;
+  busy: boolean;
+  error: string;
+  defaultMonths: 1 | 3 | 6 | 12;
+  onClose: () => void;
+  onConfirm: (months: 1 | 3 | 6 | 12) => void;
+}) {
+  const [months, setMonths] = useState<1 | 3 | 6 | 12>(defaultMonths);
+  return (
+    <div
+      className="backdrop"
+      onMouseDown={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <div
+        className="modal renewal-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="renewal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-title">
+          <div>
+            <small>RENOVACIÓN DE MEMBRESÍA</small>
+            <h2 id="renewal-title">
+              Renovar a {member.firstName} {member.lastName}
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="icon"
+            aria-label="Cerrar"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <p className="renewal-intro">
+          Elegí cuántos meses querés agregar a la membresía de este socio.
+        </p>
+        <div className="renewal-current">
+          <CalendarDays size={18} />
+          <span>
+            Vencimiento actual <strong>{showDate(member.endDate)}</strong>
+          </span>
+        </div>
+        <div
+          className="renewal-options"
+          role="group"
+          aria-label="Meses de renovación"
+        >
+          {([1, 3, 6, 12] as const).map((value) => (
+            <button
+              type="button"
+              key={value}
+              className={
+                months === value ? "renewal-option picked" : "renewal-option"
+              }
+              aria-pressed={months === value}
+              onClick={() => setMonths(value)}
+            >
+              <strong>{value}</strong>
+              <span>{value === 1 ? "mes" : "meses"}</span>
+            </button>
+          ))}
+        </div>
+        {error && (
+          <div className="alert" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={busy}
+            onClick={() => onConfirm(months)}
+          >
+            <RotateCcw size={16} />{" "}
+            {busy ? "Renovando…" : "Confirmar renovación"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
-function Avatar({m}:{m:Member}){return <span className="member-avatar">{m.firstName[0]}{m.lastName[0]}</span>}
-function Badge({m}:{m:Member}){const s=status(m);return <span className={`badge ${s}`}>{labels[s]}</span>}
-function Stat({icon,label,value,detail,highlight=false}:{icon:React.ReactNode;label:string;value:number;detail:string;highlight?:boolean}){return <div className={`stat ${highlight?'highlight':''}`}><div><small>{label}</small><span>{icon}</span></div><strong>{value}</strong><p>{detail}</p></div>}
-export default App
+
+function App({
+  username,
+  role,
+  onLogout,
+}: {
+  username: string;
+  role: "ADMIN" | "TRAINER";
+  onLogout: () => void;
+}) {
+  const { confirm, dialog } = useConfirmDialog();
+  const [gymSettings, setGymSettings] = useState<GymSettings | null>(null);
+  const [plansInitialTab, setPlansInitialTab] = useState<
+    "overview" | "catalog" | "foods"
+  >("overview");
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [memberPage, setMemberPage] = useState(1);
+  const [studentAccess, setStudentAccess] = useState<{
+    username: string;
+    initialPassword: string;
+  } | null>(null);
+  const [selectedStudentAccess, setSelectedStudentAccess] =
+    useState<StudentAccess | null>(null);
+  const [engagement, setEngagement] = useState<StudentEngagement | null>(null);
+  const [page, setPage] = useState<
+      "dashboard" | "access" | "members" | "plans" | "settings"
+    >("dashboard"),
+    [members, setMembers] = useState<Member[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [editing, setEditing] = useState<Member | "new" | null>(null),
+    [selected, setSelected] = useState<Member | null>(null),
+    [renewing, setRenewing] = useState<Member | null>(null),
+    [renewalError, setRenewalError] = useState(""),
+    [query, setQuery] = useState(""),
+    [filter, setFilter] = useState<Filter>("all");
+  async function reload() {
+    try {
+      setLoading(true);
+      setMembers(await api<Member[]>("/members"));
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error de conexión");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    api<Member[]>("/members")
+      .then((data) => {
+        setMembers(data);
+        setError("");
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Error de conexión"),
+      )
+      .finally(() => setLoading(false));
+    api<GymSettings>("/settings")
+      .then(setGymSettings)
+      .catch(() => {});
+    api<StudentEngagement>("/dashboard/student-engagement")
+      .then(setEngagement)
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (selected)
+      api<StudentAccess>(`/members/${selected.id}/student-access`)
+        .then(setSelectedStudentAccess)
+        .catch(() => setSelectedStudentAccess(null));
+  }, [selected]);
+  const counts = useMemo(
+    () => ({
+      all: members.length,
+      active: members.filter((m) => status(m) === "active").length,
+      soon: members.filter((m) => status(m) === "soon").length,
+      expired: members.filter((m) => status(m) === "expired").length,
+      inactive: members.filter((m) => status(m) === "inactive").length,
+      pending: members.filter((m) => status(m) === "pending").length,
+    }),
+    [members],
+  );
+  const shown = members.filter(
+    (m) =>
+      (filter === "all" || status(m) === filter) &&
+      `${m.firstName} ${m.lastName} ${m.phone} ${m.dni || ""}`
+        .toLocaleLowerCase("es-AR")
+        .includes(query.toLocaleLowerCase("es-AR")),
+  );
+  const memberPageCount = Math.max(1, Math.ceil(shown.length / 15));
+  const currentMemberPage = Math.min(memberPage, memberPageCount);
+  const memberOffset = (currentMemberPage - 1) * 15;
+  const paginatedMembers = shown.slice(memberOffset, memberOffset + 15);
+  const upcoming = members
+    .filter((m) => ["soon", "expired"].includes(status(m)))
+    .sort((a, b) => a.endDate.localeCompare(b.endDate))
+    .slice(0, 5);
+  async function save(data: MemberInput) {
+    setBusy(true);
+    try {
+      const created = await api<
+        Member & {
+          studentAccount?: { username: string; initialPassword: string };
+        }
+      >(editing && editing !== "new" ? `/members/${editing.id}` : "/members", {
+        method: editing && editing !== "new" ? "PUT" : "POST",
+        body: JSON.stringify(data),
+      });
+      setEditing(null);
+      if (created.studentAccount) setStudentAccess(created.studentAccount);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function renew(months: 1 | 3 | 6 | 12) {
+    if (!renewing) return;
+    setBusy(true);
+    setRenewalError("");
+    try {
+      await api(`/members/${renewing.id}/renew`, {
+        method: "POST",
+        body: JSON.stringify({ months }),
+      });
+      setRenewing(null);
+      await reload();
+    } catch (e) {
+      setRenewalError(e instanceof Error ? e.message : "No se pudo renovar");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(m: Member) {
+    if (
+      !(await confirm(
+        "¿Eliminar socio?",
+        `Se eliminará a ${m.firstName} ${m.lastName}. Esta acción no se puede deshacer.`,
+      ))
+    )
+      return;
+    try {
+      await api(`/members/${m.id}`, { method: "DELETE" });
+      setSelected(null);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo eliminar");
+    }
+  }
+  async function resetStudentAccess(m: Member) {
+    if (
+      !(await confirm(
+        "¿Restablecer acceso?",
+        `La contraseña de ${m.firstName} ${m.lastName} volverá a la inicial y deberá cambiarla al ingresar.`,
+      ))
+    )
+      return;
+    try {
+      const access = await api<{ username: string; initialPassword: string }>(
+        `/members/${m.id}/reset-student-access`,
+        { method: "POST" },
+      );
+      setSelected(null);
+      setStudentAccess(access);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo restablecer el acceso",
+      );
+    }
+  }
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <img src={gymSettings?.logoDataUrl || logo} alt="" />
+          <div>
+            <strong>{gymSettings?.name || "LEGADO GYM"}</strong>
+            <small>PANEL DE GESTIÓN</small>
+          </div>
+        </div>
+        <p className="nav-label">MENÚ PRINCIPAL</p>
+        <nav>
+          <button
+            className={page === "dashboard" ? "nav current" : "nav"}
+            onClick={() => setPage("dashboard")}
+          >
+            <LayoutDashboard size={18} /> Resumen
+          </button>
+          <button
+            className={page === "access" ? "nav current" : "nav"}
+            onClick={() => setPage("access")}
+          >
+            <KeyRound size={18} /> Control de acceso
+          </button>
+          <button
+            className={page === "members" ? "nav current" : "nav"}
+            onClick={() => setPage("members")}
+          >
+            <Users size={18} /> Socios <span>{counts.all}</span>
+          </button>
+          <button
+            className={page === "plans" ? "nav current" : "nav"}
+            onClick={() => {
+              setPlansInitialTab("overview");
+              setPage("plans");
+            }}
+          >
+            <ClipboardList size={18} /> Planes por alumno
+          </button>
+          {role === "ADMIN" && (
+            <button
+              className={page === "settings" ? "nav current" : "nav"}
+              onClick={() => setPage("settings")}
+            >
+              <Settings2 size={18} /> Configuración
+            </button>
+          )}
+        </nav>
+        <button
+          className="sidebar-help"
+          type="button"
+          onClick={() => setGuideOpen(true)}
+        >
+          <Dumbbell size={19} /> FUERZA EN CADA PASO{" "}
+          <span className="help-mark" aria-hidden="true">
+            ?
+          </span>
+        </button>
+      </aside>
+      <main>
+        <header className="topbar">
+          <span>
+            {gymSettings?.name || "LEGADO GYM"} <b>/</b>{" "}
+            {page === "dashboard"
+              ? "RESUMEN"
+              : page === "access"
+                ? "CONTROL DE ACCESO"
+                : page === "members"
+                  ? "SOCIOS"
+                  : page === "settings"
+                    ? "CONFIGURACIÓN"
+                    : "PLANES POR ALUMNO"}
+          </span>
+          <span className="user">
+            <i /> {username}{" "}
+            <button className="logout" onClick={onLogout}>
+              Salir
+            </button>
+            <strong>LG</strong>
+          </span>
+        </header>
+        <div className="content">
+          {error && (
+            <div className="alert" role="alert">
+              {error}. Verificá la conexión con la API y PostgreSQL.{" "}
+              <button onClick={() => void reload()}>Reintentar</button>
+            </div>
+          )}
+          {page !== "plans" && page !== "settings" && page !== "access" && (
+            <div className="heading">
+              <div>
+                <small>
+                  {page === "dashboard" ? "PANEL GENERAL" : "GESTIÓN DE SOCIOS"}{" "}
+                  ━━━
+                </small>
+                <h1>
+                  {page === "dashboard" ? (
+                    <>
+                      Buen día, <em>equipo Legado.</em>
+                    </>
+                  ) : (
+                    <>
+                      Socios<em>.</em>
+                    </>
+                  )}
+                </h1>
+                <p>
+                  {page === "dashboard"
+                    ? `Una vista rápida de tu gimnasio hoy, ${new Date().toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })}.`
+                    : "Administrá fichas y vencimientos de tu comunidad."}
+                </p>
+              </div>
+              {role === "ADMIN" && (
+                <button
+                  className="button primary"
+                  onClick={() => setEditing("new")}
+                >
+                  <Plus size={18} /> Nuevo socio
+                </button>
+              )}
+            </div>
+          )}
+          {page === "access" ? (
+            <AccessControl
+              onRenew={(memberId) => {
+                const member = members.find((item) => item.id === memberId);
+                if (member) {
+                  setRenewing(member);
+                  setRenewalError("");
+                }
+              }}
+            />
+          ) : page === "dashboard" ? (
+            <>
+              <div className="stats">
+                <Stat
+                  icon={<Users />}
+                  label="TOTAL DE SOCIOS"
+                  value={counts.all}
+                  detail="Registrados en el sistema"
+                />
+                <Stat
+                  icon={<Activity />}
+                  label="SOCIOS ACTIVOS"
+                  value={counts.active + counts.soon}
+                  detail="Con membresía vigente"
+                />
+                <Stat
+                  icon={<CalendarDays />}
+                  label="POR VENCER"
+                  value={counts.soon}
+                  detail="En los próximos 7 días"
+                  highlight
+                />
+                <Stat
+                  icon={<RotateCcw />}
+                  label="VENCIDOS"
+                  value={counts.expired}
+                  detail="Pendientes de renovación"
+                />
+              </div>
+              {engagement && (
+                <section className="engagement-panel">
+                  <div className="engagement-summary">
+                    <div><small>APP DE ALUMNOS</small><h2>Actividad de la comunidad</h2><p>Seguimiento de accesos y entrenamientos registrados.</p></div>
+                    <div className="engagement-metrics"><span><strong>{engagement.activatedAccounts}</strong>cuentas activadas</span><span><strong>{engagement.trainedThisWeek}</strong>entrenaron esta semana</span></div>
+                  </div>
+                  <div className="engagement-list">
+                    <div><small>SIN INGRESO EN 14 DÍAS</small><strong>{engagement.inactive.length ? `${engagement.inactive.length} para revisar` : 'Todo al día'}</strong></div>
+                    {engagement.inactive.length ? engagement.inactive.map((item) => <button key={item.id} onClick={() => { const member = members.find((value) => value.id === item.id); if (member) setSelected(member) }}><Avatar m={{ ...item, dni: null, birthDate: null, weightKg: null, objective: '', startDate: '', endDate: '', inactive: false, createdAt: '' }} /><span><strong>{item.firstName} {item.lastName}</strong><small>{item.lastLoginAt ? `Último ingreso hace ${item.daysSinceLogin} días` : 'Todavía no ingresó a la app'}</small></span><ArrowRight size={16} /></button>) : <p>Todos los alumnos con cuenta ingresaron recientemente.</p>}
+                  </div>
+                </section>
+              )}
+              <div className="dashboard-grid">
+                <section className="panel">
+                  <div className="panel-head">
+                    <div>
+                      <small>ATENCIÓN PRIORITARIA</small>
+                      <h2>Próximos vencimientos</h2>
+                    </div>
+                    <button
+                      className="link"
+                      onClick={() => {
+                        setPage("members");
+                        setFilter("soon");
+                        setMemberPage(1);
+                      }}
+                    >
+                      Ver socios <ArrowRight size={16} />
+                    </button>
+                  </div>
+                  {loading ? (
+                    <div className="empty">Cargando socios…</div>
+                  ) : upcoming.length ? (
+                    upcoming.map((m) => (
+                      <button
+                        className="upcoming"
+                        key={m.id}
+                        onClick={() => setSelected(m)}
+                      >
+                        <Avatar m={m} />
+                        <span className="name">
+                          <strong>
+                            {m.firstName} {m.lastName}
+                          </strong>
+                          <small>{m.phone}</small>
+                        </span>
+                        <Badge m={m} />
+                        <time>{showDate(m.endDate)}</time>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="empty">No hay vencimientos próximos.</div>
+                  )}
+                </section>
+                <section className="panel quick">
+                  <small>ACCESO RÁPIDO</small>
+                  <h2>Todo empieza con un socio.</h2>
+                  <p>
+                    Registrá los datos de tus alumnos y mantené sus membresías
+                    al día desde un solo lugar.
+                  </p>
+                  <button
+                    className="button outline"
+                    onClick={() => setPage("members")}
+                  >
+                    Gestionar socios <ArrowRight size={17} />
+                  </button>
+                  <Dumbbell className="watermark" size={115} />
+                </section>
+              </div>
+            </>
+          ) : page === "members" ? (
+            <section className="panel member-panel">
+              <div className="toolbar">
+                <div className="search">
+                  <Search size={17} />
+                  <input
+                    placeholder="Buscar por nombre, DNI o teléfono…"
+                    aria-label="Buscar socios"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setMemberPage(1);
+                    }}
+                  />
+                </div>
+                <span>{shown.length} socios</span>
+              </div>
+              <div className="filters">
+                {(
+                  [
+                    "all",
+                    "active",
+                    "soon",
+                    "expired",
+                    "inactive",
+                    "pending",
+                  ] as Filter[]
+                ).map((f) => (
+                  <button
+                    key={f}
+                    className={filter === f ? "filter picked" : "filter"}
+                    onClick={() => {
+                      setFilter(f);
+                      setMemberPage(1);
+                    }}
+                  >
+                    {f === "all" ? "Todos" : labels[f]} <span>{counts[f]}</span>
+                  </button>
+                ))}
+              </div>
+              {loading ? (
+                <div className="empty">Cargando socios…</div>
+              ) : shown.length ? (
+                <>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>SOCIO</th>
+                          <th>DNI</th>
+                          <th>TELÉFONO</th>
+                          <th>VENCIMIENTO</th>
+                          <th>ESTADO</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedMembers.map((m) => (
+                          <tr key={m.id} onClick={() => setSelected(m)}>
+                            <td>
+                              <div className="name-cell">
+                                <Avatar m={m} />
+                                <strong>
+                                  {m.firstName} {m.lastName}
+                                </strong>
+                              </div>
+                            </td>
+                            <td>{m.dni || "Pendiente"}</td>
+                            <td>{m.phone}</td>
+                            <td>{showDate(m.endDate)}</td>
+                            <td>
+                              <Badge m={m} />
+                            </td>
+                            <td>
+                              <ArrowRight size={17} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <nav
+                    className="member-pagination"
+                    aria-label="Paginación de socios"
+                  >
+                    <span>
+                      Mostrando {memberOffset + 1}–
+                      {Math.min(memberOffset + 15, shown.length)} de{" "}
+                      {shown.length} socios
+                    </span>
+                    <div>
+                      <button
+                        className="button secondary"
+                        disabled={currentMemberPage === 1}
+                        onClick={() => setMemberPage(currentMemberPage - 1)}
+                      >
+                        Anterior
+                      </button>
+                      <span aria-live="polite">
+                        Página {currentMemberPage} de {memberPageCount}
+                      </span>
+                      <button
+                        className="button secondary"
+                        disabled={currentMemberPage === memberPageCount}
+                        onClick={() => setMemberPage(currentMemberPage + 1)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </nav>
+                </>
+              ) : (
+                <div className="empty">
+                  <Users size={32} />
+                  <strong>No hay socios para mostrar</strong>
+                  <p>
+                    {query || filter !== "all"
+                      ? "Probá otra búsqueda o filtro."
+                      : "Creá el primer socio para empezar."}
+                  </p>
+                </div>
+              )}
+            </section>
+          ) : page === "settings" && role === "ADMIN" ? (
+            gymSettings ? (
+              <Settings
+                value={gymSettings}
+                onSaved={setGymSettings}
+                onOpenCatalog={(area) => {
+                  setPlansInitialTab(area === "training" ? "catalog" : "foods");
+                  setPage("plans");
+                }}
+              />
+            ) : (
+              <div className="empty">Cargando configuración…</div>
+            )
+          ) : (
+            <Plans
+              key={plansInitialTab}
+              members={members}
+              role={role}
+              initialTab={plansInitialTab}
+              logoUrl={gymSettings?.logoDataUrl || logo}
+              gymName={gymSettings?.name || "Legado Gym"}
+            />
+          )}
+        </div>
+      </main>
+      {dialog}
+      {guideOpen && (
+        <UsageGuide role={role} onClose={() => setGuideOpen(false)} />
+      )}
+      {editing && (
+        <MemberForm
+          member={editing === "new" ? undefined : editing}
+          onSave={save}
+          onClose={() => setEditing(null)}
+          busy={busy}
+          defaultMonths={gymSettings?.defaultMembershipMonths || 1}
+        />
+      )}
+      {renewing && (
+        <RenewalDialog
+          member={renewing}
+          busy={busy}
+          error={renewalError}
+          defaultMonths={gymSettings?.defaultMembershipMonths || 1}
+          onClose={() => {
+            setRenewing(null);
+            setRenewalError("");
+          }}
+          onConfirm={(months) => void renew(months)}
+        />
+      )}
+      {studentAccess && (
+        <div className="backdrop">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-access-title"
+          >
+            <div className="modal-title">
+              <div>
+                <small>ACCESO DEL ALUMNO</small>
+                <h2 id="student-access-title">Cuenta creada</h2>
+              </div>
+            </div>
+            <p>
+              Compartí estos datos con el alumno. Al ingresar deberá cambiar su
+              contraseña.
+            </p>
+            <div className="detail-grid">
+              <div>
+                <small>Usuario</small>
+                <strong>{studentAccess.username}</strong>
+              </div>
+              <div>
+                <small>Contraseña inicial</small>
+                <strong>{studentAccess.initialPassword}</strong>
+              </div>
+            </div>
+            <div className="actions">
+              <button
+                className="button primary"
+                onClick={() => setStudentAccess(null)}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selected && (
+        <div className="backdrop" onMouseDown={() => setSelected(null)}>
+          <div
+            className="modal detail"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-title"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-title">
+              <div>
+                <small>FICHA DEL SOCIO</small>
+                <h2 id="detail-title">
+                  {selected.firstName} {selected.lastName}
+                </h2>
+              </div>
+              <button
+                className="icon"
+                aria-label="Cerrar"
+                onClick={() => setSelected(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <Badge m={selected} />
+            <div className="detail-grid">
+              {[
+                ["DNI", selected.dni || "Pendiente de cargar"],
+                ["Teléfono", selected.phone],
+                ["Fecha de nacimiento", showDate(selected.birthDate)],
+                ["Peso", selected.weightKg ? `${selected.weightKg} kg` : "—"],
+                ["Inicio", showDate(selected.startDate)],
+                ["Vencimiento", showDate(selected.endDate)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <small>{label}</small>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="objective">
+              <small>Objetivo</small>
+              <p>{selected.objective || "Sin objetivo registrado"}</p>
+            </div>
+            {role === "ADMIN" && (
+              <div className="objective">
+                <small>Acceso a la app</small>
+                {selectedStudentAccess?.exists ? (
+                  <p>
+                    Usuario: <strong>{selectedStudentAccess.username}</strong>
+                    {selectedStudentAccess.forcePasswordChange
+                      ? " · Debe cambiar su contraseña al ingresar."
+                      : " · Contraseña personalizada."}
+                  </p>
+                ) : (
+                  <p>Sin cuenta de alumno.</p>
+                )}
+              </div>
+            )}
+            <div className="actions">
+              {role === "ADMIN" && (
+                <>
+                  <button
+                    className="button primary"
+                    onClick={() => {
+                      setRenewing(selected);
+                      setRenewalError("");
+                      setSelected(null);
+                    }}
+                  >
+                    <RotateCcw size={16} /> Renovar
+                  </button>
+                  <button
+                    className="button secondary"
+                    onClick={() => {
+                      setEditing(selected);
+                      setSelected(null);
+                    }}
+                  >
+                    <Pencil size={16} /> Editar
+                  </button>
+                  {selectedStudentAccess?.exists && (
+                    <button
+                      className="button secondary"
+                      onClick={() => void resetStudentAccess(selected)}
+                    >
+                      <KeyRound size={16} /> Restablecer acceso
+                    </button>
+                  )}
+                  <button
+                    className="button danger"
+                    onClick={() => void remove(selected)}
+                  >
+                    <Trash2 size={16} /> Eliminar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function Avatar({ m }: { m: Member }) {
+  return (
+    <span className="member-avatar">
+      {m.firstName[0]}
+      {m.lastName[0]}
+    </span>
+  );
+}
+function Badge({ m }: { m: Member }) {
+  const s = status(m);
+  return <span className={`badge ${s}`}>{labels[s]}</span>;
+}
+function Stat({
+  icon,
+  label,
+  value,
+  detail,
+  highlight = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  detail: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`stat ${highlight ? "highlight" : ""}`}>
+      <div>
+        <small>{label}</small>
+        <span>{icon}</span>
+      </div>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </div>
+  );
+}
+export default App;

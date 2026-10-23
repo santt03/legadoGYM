@@ -1,0 +1,11 @@
+{
+  "name": "Legado Gym · Alumnos",
+  "short_name": "Legado Gym",
+  "description": "Rutinas, alimentación y novedades de Legado Gym.",
+  "start_url": "/alumno",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#bef264",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }],
+  "shortcuts": [{ "name": "Mi rutina", "url": "/alumno" }, { "name": "Mi dieta", "url": "/alumno" }]
+}
