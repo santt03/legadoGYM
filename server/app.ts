@@ -5,6 +5,7 @@ import { registerPlanRoutes } from './plans.js'
 import { registerDietRoutes } from './diets.js'
 import { registerAuth } from './auth.js'
 import { registerSettingsRoutes } from './settings.js'
+import { registerCronRoutes } from './cron.js'
 
 const date = z.iso.date()
 const memberInput = z.object({
@@ -25,6 +26,7 @@ const memberInput = z.object({
 
 const app = new Hono()
 registerAuth(app)
+registerCronRoutes(app)
 
 type DbMember = {
   id: string; first_name: string; last_name: string; dni: string | null; phone: string

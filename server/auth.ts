@@ -31,7 +31,7 @@ function tokenHash(token: string) { return createHash('sha256').update(token).di
 export function registerAuth(app: Hono) {
   app.use('/api/*', async (c, next) => {
     const path = c.req.path
-    if (path === '/api/health' || path === '/api/public/gym') return next()
+    if (path === '/api/health' || path === '/api/public/gym' || path.startsWith('/api/cron/')) return next()
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && c.req.header('X-Legado-Request') !== '1') {
       return c.json({ error: 'Solicitud no permitida' }, 403)
     }
